@@ -13,9 +13,20 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mrazort1.discipline",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow Discipline to use the camera to analyze meals.",
+        "NSPhotoLibraryUsageDescription": "Allow Discipline to select meal photos from your gallery."
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.mrazort1.discipline"
+    },
     "plugins": [
       "expo-router",
       [
@@ -33,6 +44,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "55978e7d-a265-44b6-8c88-132665f959f8"
+      }
     }
   }
 }
