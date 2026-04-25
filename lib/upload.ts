@@ -58,3 +58,14 @@ export const uploadMealPhoto = async (uri: string): Promise<string> => {
 
   return presigned.objectKey;
 };
+
+export const uploadMealPhotos = async (uris: string[]): Promise<string[]> => {
+  const limitedUris = uris.slice(0, 3);
+  const objectKeys = [];
+
+  for (const uri of limitedUris) {
+    objectKeys.push(await uploadMealPhoto(uri));
+  }
+
+  return objectKeys;
+};

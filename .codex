@@ -26,8 +26,6 @@ Deployable functions live in `supabase/functions/`:
 - `get-upload-url`
 - `get-photo-url`
 - `get-photo-urls`
-- `create-household-invite`
-- `join-household`
 
 Required Supabase secrets:
 

@@ -2,8 +2,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 type AnalyzeMealRequest = {
   object_key?: string;
+  object_keys?: string[];
   user_id?: string;
-  household_id?: string;
 };
 
 type MealAnalysis = {
@@ -96,10 +96,17 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Request body must be valid JSON." }, 400);
   }
 
-  const { object_key, user_id, household_id } = body;
-  if (!object_key || !user_id || !household_id) {
+  const objectKeys = [
+    ...new Set(
+      (Array.isArray(body.object_keys) ? body.object_keys : [body.object_key])
+        .filter((key): key is string => typeof key === "string" && key.length > 0),
+    ),
+  ].slice(0, 3);
+  const { user_id } = body;
+
+  if (objectKeys.length === 0 || !user_id) {
     return jsonResponse(
-      { error: "Missing required fields: object_key, user_id, household_id." },
+      { error: "Missing required fields: object_keys, user_id." },
       400,
     );
   }
@@ -123,31 +130,41 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unauthorized for requested user_id." }, 401);
     }
 
+    const allowedPrefix = `meals/${user_id}/`;
+    if (objectKeys.some((objectKey) => !objectKey.startsWith(allowedPrefix))) {
+      return jsonResponse({ error: "Unauthorized for requested object key." }, 403);
+    }
+
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, household_id")
+      .select("id")
       .eq("id", user_id)
-      .eq("household_id", household_id)
       .single();
 
     if (profileError || !profile) {
       return jsonResponse(
-        { error: "User does not belong to the requested household." },
+        { error: "Profile does not exist for requested user." },
         403,
       );
     }
 
-    const { data: signedPhoto, error: signedPhotoError } = await supabase.storage
-      .from("meal-photos")
-      .createSignedUrl(object_key, 300);
+    const signedPhotoUrls = [];
+    for (const objectKey of objectKeys) {
+      const { data: signedPhoto, error: signedPhotoError } = await supabase.storage
+        .from("meal-photos")
+        .createSignedUrl(objectKey, 300);
 
-    if (signedPhotoError || !signedPhoto?.signedUrl) {
-      console.error("Signed photo URL error:", signedPhotoError);
-      return jsonResponse({ error: "Could not create signed photo URL." }, 500);
+      if (signedPhotoError || !signedPhoto?.signedUrl) {
+        console.error("Signed photo URL error:", signedPhotoError);
+        return jsonResponse({ error: "Could not create signed photo URL." }, 500);
+      }
+
+      signedPhotoUrls.push(signedPhoto.signedUrl);
     }
 
     const prompt = [
-      "Analyze this meal photo for a calorie tracking app called Discipline.",
+      "Analyze these meal photos for a calorie tracking app called Discipline.",
+      "The photos may show the same meal from different angles or close-ups.",
       "Return ONLY valid JSON with this exact shape:",
       '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number}],"total_kcal":number,"confidence":"low|medium|high"}',
       "Use null for estimated_grams only when a gram estimate is not possible.",
@@ -169,7 +186,10 @@ Deno.serve(async (req) => {
               role: "user",
               content: [
                 { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: signedPhoto.signedUrl } },
+                ...signedPhotoUrls.map((signedUrl) => ({
+                  type: "image_url",
+                  image_url: { url: signedUrl },
+                })),
               ],
             },
           ],
@@ -208,12 +228,11 @@ Deno.serve(async (req) => {
     const { data: meal, error: mealError } = await supabase
       .from("meals")
       .insert({
-        photo_url: object_key,
+        photo_url: objectKeys[0],
         total_kcal: analysis.total_kcal,
         confidence: analysis.confidence,
         meal_name: analysis.meal_name,
         user_id,
-        household_id,
       })
       .select()
       .single();

@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AvatarDot } from "@/components/AvatarDot";
-import { createHouseholdInvite, joinHousehold } from "@/lib/households";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types/database";
 
@@ -27,9 +26,6 @@ export default function SettingsScreen() {
   const [color, setColor] = useState(colors[0]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState("");
-  const [householdWorking, setHouseholdWorking] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -65,6 +61,12 @@ export default function SettingsScreen() {
   const save = async () => {
     if (!profile) return;
 
+    const fullName = name.trim().replace(/\s+/g, " ");
+    if (fullName.split(" ").length < 2) {
+      Alert.alert("Invalid name", "Enter your first and last name.");
+      return;
+    }
+
     const parsedGoal = Number.parseInt(dailyGoal, 10);
     if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) {
       Alert.alert("Invalid goal", "Daily goal must be a positive number.");
@@ -75,7 +77,7 @@ export default function SettingsScreen() {
     const { error } = await supabase
       .from("profiles")
       .update({
-        name: name.trim(),
+        name: fullName,
         daily_goal_kcal: parsedGoal,
         color,
         updated_at: new Date().toISOString(),
@@ -89,44 +91,6 @@ export default function SettingsScreen() {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-  };
-
-  const generateInvite = async () => {
-    setHouseholdWorking(true);
-    try {
-      const invite = await createHouseholdInvite();
-      setInviteCode(invite.code);
-    } catch (inviteError) {
-      Alert.alert(
-        "Could not create invite",
-        inviteError instanceof Error ? inviteError.message : "Try again.",
-      );
-    } finally {
-      setHouseholdWorking(false);
-    }
-  };
-
-  const submitJoinCode = async () => {
-    const code = joinCode.trim();
-    if (!code) {
-      Alert.alert("Missing code", "Enter a household invite code.");
-      return;
-    }
-
-    setHouseholdWorking(true);
-    try {
-      await joinHousehold(code);
-      setJoinCode("");
-      Alert.alert("Household joined", "Your household has been updated.");
-      router.back();
-    } catch (joinError) {
-      Alert.alert(
-        "Could not join household",
-        joinError instanceof Error ? joinError.message : "Try again.",
-      );
-    } finally {
-      setHouseholdWorking(false);
-    }
   };
 
   return (
@@ -163,11 +127,11 @@ export default function SettingsScreen() {
               <AvatarDot color={color} label={name || "Me"} size={72} />
             </View>
 
-            <Text className="mb-2 mt-8 text-sm font-semibold text-ink">Name</Text>
+            <Text className="mb-2 mt-8 text-sm font-semibold text-ink">Full name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Your name"
+              placeholder="First and last name"
               placeholderTextColor="#9a9287"
               className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
             />
@@ -197,61 +161,11 @@ export default function SettingsScreen() {
               ))}
             </View>
 
-            <View className="mt-8 rounded-lg border border-line bg-field p-4">
-              <Text className="text-base font-bold text-ink">Household</Text>
-              <Text className="mt-1 text-sm text-muted">
-                Share a code to invite someone, or enter a code to join another household.
-              </Text>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={householdWorking}
-                onPress={generateInvite}
-                className="mt-4 h-12 flex-row items-center justify-center gap-2 rounded-lg bg-teal"
-              >
-                {householdWorking ? (
-                  <ActivityIndicator color="#fffdf8" />
-                ) : (
-                  <Ionicons name="ticket" size={18} color="#fffdf8" />
-                )}
-                <Text className="font-semibold text-white">Generate invite code</Text>
-              </TouchableOpacity>
-
-              {inviteCode ? (
-                <View className="mt-4 rounded-lg border border-line bg-paper p-4">
-                  <Text className="text-xs font-semibold uppercase text-muted">Invite code</Text>
-                  <Text className="mt-1 text-3xl font-bold tracking-widest text-ink">
-                    {inviteCode}
-                  </Text>
-                </View>
-              ) : null}
-
-              <Text className="mb-2 mt-5 text-sm font-semibold text-ink">Join with code</Text>
-              <View className="flex-row gap-2">
-                <TextInput
-                  value={joinCode}
-                  onChangeText={(value) => setJoinCode(value.toUpperCase())}
-                  autoCapitalize="characters"
-                  placeholder="ABC123"
-                  placeholderTextColor="#9a9287"
-                  className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base font-semibold text-ink"
-                />
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  disabled={householdWorking}
-                  onPress={submitJoinCode}
-                  className="h-12 w-24 items-center justify-center rounded-lg bg-ink"
-                >
-                  <Text className="font-semibold text-white">Join</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
             <TouchableOpacity
               activeOpacity={0.85}
               disabled={saving}
               onPress={save}
-              className="mt-8 h-14 items-center justify-center rounded-lg bg-ink"
+              className="mt-8 h-14 items-center justify-center rounded-lg bg-teal"
             >
               {saving ? (
                 <ActivityIndicator color="#fffdf8" />

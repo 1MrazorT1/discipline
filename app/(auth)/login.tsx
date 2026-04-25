@@ -36,7 +36,7 @@ export default function LoginScreen() {
       className="flex-1 justify-center bg-paper px-6"
     >
       <Text className="text-4xl font-bold text-ink">Discipline</Text>
-      <Text className="mt-2 text-base text-muted">Track meals with your household.</Text>
+      <Text className="mt-2 text-base text-muted">Track meals with photo analysis.</Text>
 
       <View className="mt-8 gap-3">
         <TextInput
@@ -66,7 +66,7 @@ export default function LoginScreen() {
         activeOpacity={0.85}
         disabled={loading}
         onPress={login}
-        className="mt-6 h-14 items-center justify-center rounded-lg bg-ink"
+        className="mt-6 h-14 items-center justify-center rounded-lg bg-teal"
       >
         {loading ? (
           <ActivityIndicator color="#fffdf8" />

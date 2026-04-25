@@ -20,16 +20,20 @@ import { addDays, dayBounds, formatDayTitle, startOfDay } from "@/lib/dates";
 import { analyzeMeal, getSignedPhotoUrls } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
-import { uploadMealPhoto } from "@/lib/upload";
-import type { HouseholdMember, MealWithItems } from "@/types/database";
+import { uploadMealPhotos } from "@/lib/upload";
+import type { DailyProfile, MealWithItems } from "@/types/database";
 
-const fallbackColors = ["#3f9c75", "#d95b43"];
+const getProgressColor = (progress: number) => {
+  if (progress > 1) return "#d95b43";
+  if (progress > 0.85) return "#d6a23a";
+  if (progress > 0.45) return "#3f9c75";
+  return "#2f7f86";
+};
 
 export default function HomeScreen() {
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
-  const [householdId, setHouseholdId] = useState<string | null>(null);
-  const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [profile, setProfile] = useState<DailyProfile | null>(null);
   const [meals, setMeals] = useState<MealWithItems[]>([]);
   const [signedPhotoUrls, setSignedPhotoUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -47,43 +51,25 @@ export default function HomeScreen() {
 
     setUserId(currentUser.id);
 
-    let profile;
+    let loadedProfile;
     try {
-      profile = await ensureProfile({
+      loadedProfile = await ensureProfile({
         userId: currentUser.id,
         email: currentUser.email,
       });
     } catch (profileError) {
-      setError(profileError instanceof Error ? profileError.message : "Profile is missing a household.");
+      setError(profileError instanceof Error ? profileError.message : "Could not load profile.");
       setLoading(false);
       return;
     }
 
-    if (!profile.household_id) {
-      setError("Profile is missing a household.");
-      setLoading(false);
-      return;
-    }
-
-    setHouseholdId(profile.household_id);
-
-    const { data: householdMembers, error: membersError } = await supabase
-      .from("profiles")
-      .select("id, name, household_id, daily_goal_kcal, color, avatar_url")
-      .eq("household_id", profile.household_id)
-      .limit(2);
-
-    if (membersError) {
-      setError(membersError.message);
-      setLoading(false);
-      return;
-    }
+    setProfile(loadedProfile);
 
     const { start, end } = dayBounds(selectedDay);
     const { data: dayMeals, error: mealsError } = await supabase
       .from("meals")
       .select("*, meal_items(*)")
-      .eq("household_id", profile.household_id)
+      .eq("user_id", currentUser.id)
       .gte("eaten_at", start)
       .lt("eaten_at", end)
       .order("eaten_at", { ascending: false });
@@ -95,7 +81,6 @@ export default function HomeScreen() {
     }
 
     const loadedMeals = (dayMeals ?? []) as MealWithItems[];
-    setMembers((householdMembers ?? []) as HouseholdMember[]);
     setMeals(loadedMeals);
 
     const objectKeys = loadedMeals
@@ -118,16 +103,6 @@ export default function HomeScreen() {
     }, [loadData]),
   );
 
-  const totalsByMember = useMemo(() => {
-    return members.map((member) => {
-      const total = meals
-        .filter((meal) => meal.user_id === member.id)
-        .reduce((sum, meal) => sum + meal.total_kcal, 0);
-
-      return { member, total };
-    });
-  }, [meals, members]);
-
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -141,8 +116,9 @@ export default function HomeScreen() {
     [],
   );
 
-  const handlePickedImage = async (uri?: string) => {
-    if (!uri || !userId) return;
+  const handlePickedImages = async (uris: string[]) => {
+    const limitedUris = uris.filter(Boolean).slice(0, 3);
+    if (limitedUris.length === 0 || !userId) return;
 
     setAnalyzing(true);
     try {
@@ -150,23 +126,18 @@ export default function HomeScreen() {
       const currentUser = authData.user;
       if (!currentUser) throw new Error("You need to log in again.");
 
-      const profile = await ensureProfile({
+      const currentProfile = await ensureProfile({
         userId: currentUser.id,
         email: currentUser.email,
       });
 
-      if (!profile.household_id) {
-        throw new Error("Profile is missing a household.");
-      }
-
       setUserId(currentUser.id);
-      setHouseholdId(profile.household_id);
+      setProfile(currentProfile);
 
-      const objectKey = await uploadMealPhoto(uri);
+      const objectKeys = await uploadMealPhotos(limitedUris);
       await analyzeMeal({
-        objectKey,
+        objectKeys,
         userId: currentUser.id,
-        householdId: profile.household_id,
       });
       await loadData();
     } catch (uploadError) {
@@ -177,6 +148,14 @@ export default function HomeScreen() {
     }
   };
 
+  const askForAnotherPhoto = () =>
+    new Promise<boolean>((resolve) => {
+      Alert.alert("Add another photo?", "You can attach up to 3 photos for this meal.", [
+        { text: "Analyze now", style: "cancel", onPress: () => resolve(false) },
+        { text: "Add photo", onPress: () => resolve(true) },
+      ]);
+    });
+
   const openCamera = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -184,12 +163,24 @@ export default function HomeScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      quality: 0.82,
-    });
+    const uris: string[] = [];
+    while (uris.length < 3) {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.82,
+      });
 
-    if (!result.canceled) await handlePickedImage(result.assets[0]?.uri);
+      if (result.canceled) break;
+
+      const uri = result.assets[0]?.uri;
+      if (uri) uris.push(uri);
+
+      if (uris.length >= 3) break;
+      const addAnother = await askForAnotherPhoto();
+      if (!addAnother) break;
+    }
+
+    await handlePickedImages(uris);
   };
 
   const openGallery = async () => {
@@ -201,13 +192,20 @@ export default function HomeScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 3,
       quality: 0.82,
     });
 
-    if (!result.canceled) await handlePickedImage(result.assets[0]?.uri);
+    if (!result.canceled) {
+      await handlePickedImages(result.assets.map((asset) => asset.uri));
+    }
   };
 
   const totalKcal = meals.reduce((sum, meal) => sum + meal.total_kcal, 0);
+  const dailyGoal = profile?.daily_goal_kcal ?? 2000;
+  const progress = totalKcal / Math.max(dailyGoal, 1);
+  const progressColor = getProgressColor(progress);
 
   return (
     <SafeAreaView className="flex-1 bg-paper" {...panResponder.panHandlers}>
@@ -218,8 +216,8 @@ export default function HomeScreen() {
         </View>
         <TouchableOpacity activeOpacity={0.8} onPress={() => router.push("/(app)/settings")}>
           <AvatarDot
-            color={members.find((member) => member.id === userId)?.color}
-            label={members.find((member) => member.id === userId)?.name ?? "Me"}
+            color={profile?.color}
+            label={profile?.name ?? "Me"}
           />
         </TouchableOpacity>
       </View>
@@ -231,36 +229,35 @@ export default function HomeScreen() {
       >
         <View className="items-center justify-center py-4">
           <View className="h-56 w-56 items-center justify-center">
-            {totalsByMember.slice(0, 2).map(({ member, total }, index) => (
-              <View key={member.id} className="absolute">
-                <ProgressRing
-                  size={index === 0 ? 220 : 166}
-                  strokeWidth={14}
-                  progress={total / Math.max(member.daily_goal_kcal, 1)}
-                  color={member.color ?? fallbackColors[index]}
-                />
-              </View>
-            ))}
-            <Text className="text-4xl font-bold text-ink">{totalKcal}</Text>
+            <View className="absolute">
+              <ProgressRing
+                size={220}
+                strokeWidth={14}
+                progress={progress}
+                color={progressColor}
+              />
+            </View>
+            <Text className="text-4xl font-bold" style={{ color: progressColor }}>
+              {totalKcal}
+            </Text>
             <Text className="mt-1 text-sm font-semibold text-muted">kcal logged</Text>
           </View>
         </View>
 
-        <View className="mt-2 flex-row gap-3">
-          {totalsByMember.slice(0, 2).map(({ member, total }, index) => (
-            <View key={member.id} className="flex-1 rounded-lg border border-line bg-field p-3">
-              <View
-                className="h-2 w-10 rounded-full"
-                style={{ backgroundColor: member.color ?? fallbackColors[index] }}
-              />
-              <Text className="mt-3 text-sm font-semibold text-ink" numberOfLines={1}>
-                {member.name || (member.id === userId ? "You" : "Member")}
-              </Text>
-              <Text className="mt-1 text-xs text-muted">
-                {total} / {member.daily_goal_kcal} kcal
-              </Text>
-            </View>
-          ))}
+        <View
+          className="mt-2 rounded-lg border p-4"
+          style={{ backgroundColor: `${progressColor}14`, borderColor: `${progressColor}55` }}
+        >
+          <View
+            className="h-2 w-10 rounded-full"
+            style={{ backgroundColor: progressColor }}
+          />
+          <Text className="mt-3 text-sm font-semibold text-ink" numberOfLines={1}>
+            {profile?.name || "You"}
+          </Text>
+          <Text className="mt-1 text-xs text-muted">
+            {totalKcal} / {dailyGoal} kcal
+          </Text>
         </View>
 
         {error ? <Text className="mt-5 text-sm text-tomato">{error}</Text> : null}
@@ -291,24 +288,33 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-line bg-paper px-5 pb-8 pt-4">
+      <View className="absolute bottom-0 left-0 right-0 flex-row gap-2 border-t border-line bg-paper px-5 pb-8 pt-4">
         <TouchableOpacity
           activeOpacity={0.85}
           disabled={analyzing}
           onPress={openCamera}
-          className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-ink"
+          className="h-14 flex-1 items-center justify-center rounded-lg bg-ink"
         >
           {analyzing ? <ActivityIndicator color="#fffdf8" /> : <Ionicons name="camera" size={21} color="#fffdf8" />}
-          <Text className="font-semibold text-white">Camera</Text>
+          <Text className="mt-1 text-xs font-semibold text-white">Camera</Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
           disabled={analyzing}
           onPress={openGallery}
-          className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-teal"
+          className="h-14 flex-1 items-center justify-center rounded-lg bg-teal"
         >
           <Ionicons name="images" size={21} color="#fffdf8" />
-          <Text className="font-semibold text-white">Gallery</Text>
+          <Text className="mt-1 text-xs font-semibold text-white">Gallery</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={analyzing}
+          onPress={() => router.push("/(app)/log-manual")}
+          className="h-14 flex-1 items-center justify-center rounded-lg bg-mint"
+        >
+          <Ionicons name="add" size={22} color="#fffdf8" />
+          <Text className="mt-1 text-xs font-semibold text-white">Manual</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

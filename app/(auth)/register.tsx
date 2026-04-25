@@ -25,9 +25,23 @@ export default function RegisterScreen() {
     setError(null);
     setNotice(null);
 
+    const fullName = name.trim().replace(/\s+/g, " ");
+    if (fullName.split(" ").length < 2) {
+      setLoading(false);
+      setError("Enter your first and last name.");
+      return;
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        emailRedirectTo: "discipline://",
+        data: {
+          full_name: fullName,
+          name: fullName,
+        },
+      },
     });
 
     const user = data.user;
@@ -47,7 +61,7 @@ export default function RegisterScreen() {
       await ensureProfile({
         userId: user.id,
         email: email.trim(),
-        name,
+        name: fullName,
       });
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Could not create profile.");
@@ -62,11 +76,11 @@ export default function RegisterScreen() {
       className="flex-1 justify-center bg-paper px-6"
     >
       <Text className="text-4xl font-bold text-ink">Join Discipline</Text>
-      <Text className="mt-2 text-base text-muted">Create your household calorie plan.</Text>
+      <Text className="mt-2 text-base text-muted">Create your calorie plan.</Text>
 
       <View className="mt-8 gap-3">
         <TextInput
-          placeholder="Name"
+          placeholder="First and last name"
           placeholderTextColor="#9a9287"
           value={name}
           onChangeText={setName}
@@ -100,7 +114,7 @@ export default function RegisterScreen() {
         activeOpacity={0.85}
         disabled={loading}
         onPress={register}
-        className="mt-6 h-14 items-center justify-center rounded-lg bg-ink"
+        className="mt-6 h-14 items-center justify-center rounded-lg bg-teal"
       >
         {loading ? (
           <ActivityIndicator color="#fffdf8" />

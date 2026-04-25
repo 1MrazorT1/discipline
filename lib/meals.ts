@@ -1,15 +1,16 @@
 import { supabase } from "./supabase";
 
 export const analyzeMeal = async (params: {
-  objectKey: string;
+  objectKey?: string;
+  objectKeys?: string[];
   userId: string;
-  householdId: string;
 }) => {
+  const objectKeys = params.objectKeys ?? (params.objectKey ? [params.objectKey] : []);
   const { data, error } = await supabase.functions.invoke("analyze-meal", {
     body: {
-      object_key: params.objectKey,
+      object_key: objectKeys[0],
+      object_keys: objectKeys,
       user_id: params.userId,
-      household_id: params.householdId,
     },
   });
 

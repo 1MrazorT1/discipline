@@ -5,11 +5,11 @@ Discipline is an Expo React Native calorie tracking app backed by Supabase.
 ## Features
 
 - Email/password authentication with Supabase Auth
-- Household profiles with daily calorie goals and color-coded rings
+- User profiles with daily calorie goals and color-coded progress
 - Camera/gallery meal photo capture
 - Private Supabase Storage uploads for meal photos
 - NVIDIA NIM-powered meal analysis through Supabase Edge Functions
-- Meal feed, meal detail, settings, and household invite/join flow
+- Meal feed, meal detail, and settings
 
 ## Local Setup
 
@@ -67,8 +67,6 @@ supabase functions deploy analyze-meal
 supabase functions deploy get-upload-url
 supabase functions deploy get-photo-url
 supabase functions deploy get-photo-urls
-supabase functions deploy create-household-invite
-supabase functions deploy join-household
 ```
 
 ## Development

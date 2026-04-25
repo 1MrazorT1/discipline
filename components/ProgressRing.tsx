@@ -13,7 +13,7 @@ export function ProgressRing({
   strokeWidth,
   progress,
   color,
-  trackColor = "#e5ded2",
+  trackColor = "#eadfcb",
 }: ProgressRingProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;

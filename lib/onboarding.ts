@@ -3,6 +3,8 @@ import type { Profile } from "@/types/database";
 
 const defaultColor = "#3f9c75";
 
+const cleanName = (value?: string | null) => value?.trim().replace(/\s+/g, " ") || null;
+
 export const ensureProfile = async (params: {
   userId: string;
   email?: string | null;
@@ -22,17 +24,11 @@ export const ensureProfile = async (params: {
     throw existingError;
   }
 
-  const displayName = params.name?.trim() || params.email?.split("@")[0] || "Me";
-  const { data: household, error: householdError } = await supabase
-    .from("households")
-    .insert({ name: `${displayName} household`, created_by: params.userId })
-    .select("id")
-    .single();
-
-  if (householdError || !household) {
-    throw householdError ?? new Error("Could not create household.");
-  }
-
+  const { data: authData } = await supabase.auth.getUser();
+  const metadataName =
+    cleanName(authData.user?.user_metadata?.full_name) ??
+    cleanName(authData.user?.user_metadata?.name);
+  const displayName = cleanName(params.name) ?? metadataName ?? "Me";
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .insert({
@@ -41,7 +37,6 @@ export const ensureProfile = async (params: {
       daily_goal_kcal: 2000,
       color: defaultColor,
       avatar_url: null,
-      household_id: household.id,
     })
     .select("*")
     .single();
