@@ -6,6 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
       "backgroundColor": "#f7f5f0"
     },
@@ -25,7 +26,11 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.mrazort1.discipline"
+      "package": "com.mrazort1.discipline",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#f7f5f0"
+      }
     },
     "plugins": [
       "expo-router",
