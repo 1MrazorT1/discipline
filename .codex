@@ -1,0 +1,42 @@
+# Codex Notes
+
+Discipline is an Expo Router React Native app backed by Supabase.
+
+## Local Setup
+
+- Copy `.env.example` to `.env`.
+- Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+- Never commit `.env`, Supabase service role keys, NVIDIA API keys, or Supabase `.temp` metadata.
+
+## Deploy / Update
+
+Use:
+
+```bash
+npm run update:launch
+```
+
+This installs dependencies, pushes migrations, deploys Edge Functions, and starts Expo with a clean cache.
+
+## Supabase Functions
+
+Deployable functions live in `supabase/functions/`:
+
+- `analyze-meal`
+- `get-upload-url`
+- `get-photo-url`
+- `get-photo-urls`
+- `create-household-invite`
+- `join-household`
+
+Required Supabase secrets:
+
+- `NVIDIA_API_KEY`
+- optional `NVIDIA_MODEL`
+
+Supabase provides `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` automatically to Edge Functions.
+
+## Storage
+
+Meal photos use the private Supabase Storage bucket `meal-photos`.
+The app stores object keys in `meals.photo_url`, not public URLs.
