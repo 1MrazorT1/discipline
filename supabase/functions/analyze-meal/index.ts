@@ -4,6 +4,7 @@ type AnalyzeMealRequest = {
   object_key?: string;
   object_keys?: string[];
   user_id?: string;
+  note?: string;
 };
 
 type MealAnalysis = {
@@ -102,7 +103,7 @@ Deno.serve(async (req) => {
         .filter((key): key is string => typeof key === "string" && key.length > 0),
     ),
   ].slice(0, 3);
-  const { user_id } = body;
+  const { user_id, note } = body;
 
   if (objectKeys.length === 0 || !user_id) {
     return jsonResponse(
@@ -162,14 +163,20 @@ Deno.serve(async (req) => {
       signedPhotoUrls.push(signedPhoto.signedUrl);
     }
 
-    const prompt = [
+    const promptParts = [
       "Analyze these meal photos for a calorie tracking app called Discipline.",
       "The photos may show the same meal from different angles or close-ups.",
       "Return ONLY valid JSON with this exact shape:",
       '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number}],"total_kcal":number,"confidence":"low|medium|high"}',
       "Use null for estimated_grams only when a gram estimate is not possible.",
       "Do not include markdown, comments, explanations, or extra keys.",
-    ].join("\n");
+    ];
+
+    if (note && note.trim()) {
+      promptParts.push(`Additional context from the user: ${note.trim()}`);
+    }
+
+    const prompt = promptParts.join("\n");
 
     const nvidiaResponse = await fetch(
       "https://integrate.api.nvidia.com/v1/chat/completions",

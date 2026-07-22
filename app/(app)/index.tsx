@@ -30,6 +30,11 @@ const getProgressColor = (progress: number) => {
   return "#2f7f86";
 };
 
+const isToday = (date: Date) => {
+  const today = startOfDay(new Date());
+  return date.getTime() === today.getTime();
+};
+
 export default function HomeScreen() {
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
@@ -116,7 +121,7 @@ export default function HomeScreen() {
     [],
   );
 
-  const handlePickedImages = async (uris: string[]) => {
+  const handlePickedImages = async (uris: string[], noteText?: string) => {
     const limitedUris = uris.filter(Boolean).slice(0, 3);
     if (limitedUris.length === 0 || !userId) return;
 
@@ -138,6 +143,7 @@ export default function HomeScreen() {
       await analyzeMeal({
         objectKeys,
         userId: currentUser.id,
+        note: noteText,
       });
       await loadData();
     } catch (uploadError) {
@@ -154,6 +160,25 @@ export default function HomeScreen() {
         { text: "Analyze now", style: "cancel", onPress: () => resolve(false) },
         { text: "Add photo", onPress: () => resolve(true) },
       ]);
+    });
+
+  const promptForNote = (): Promise<string | null> =>
+    new Promise((resolve) => {
+      Alert.prompt(
+        "Add a note (optional)",
+        "Any extra context helps the analysis (e.g., 'ate half', 'large portion').",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(null) },
+          {
+            text: "Analyze",
+            style: "default",
+            onPress: (text?: string) => resolve(text ?? ""),
+          },
+        ],
+        "plain-text",
+        "",
+        "default",
+      );
     });
 
   const openCamera = async () => {
@@ -180,7 +205,10 @@ export default function HomeScreen() {
       if (!addAnother) break;
     }
 
-    await handlePickedImages(uris);
+    const noteText = await promptForNote();
+    if (noteText !== null) {
+      await handlePickedImages(uris, noteText);
+    }
   };
 
   const openGallery = async () => {
@@ -198,7 +226,10 @@ export default function HomeScreen() {
     });
 
     if (!result.canceled) {
-      await handlePickedImages(result.assets.map((asset) => asset.uri));
+      const noteText = await promptForNote();
+      if (noteText !== null) {
+        await handlePickedImages(result.assets.map((asset) => asset.uri), noteText);
+      }
     }
   };
 
@@ -317,6 +348,16 @@ export default function HomeScreen() {
           <Text className="mt-1 text-xs font-semibold text-white">Manual</Text>
         </TouchableOpacity>
       </View>
+
+      {!isToday(selectedDay) && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setSelectedDay(startOfDay(new Date()))}
+          className="absolute bottom-24 right-5 h-12 w-12 items-center justify-center rounded-full bg-teal shadow-lg"
+        >
+          <Ionicons name="today" size={22} color="#fffdf8" />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }

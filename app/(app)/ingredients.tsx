@@ -4,14 +4,12 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { hasIngredientPicker, pickIngredient } from "@/lib/ingredientPicker";
 import { ensureProfile } from "@/lib/onboarding";
@@ -138,107 +136,118 @@ export default function IngredientsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
-      >
-        <View className="flex-row items-center justify-between px-5 py-3">
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.back()}
-            className="h-10 w-10 items-center justify-center rounded-full bg-field"
-          >
-            <Ionicons name="chevron-back" size={22} color="#24211d" />
-          </TouchableOpacity>
-          <Text className="text-base font-bold text-ink">Ingredients</Text>
-          <View className="h-10 w-10" />
-        </View>
-
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="px-5 pb-8 pt-4"
-          keyboardShouldPersistTaps="handled"
+      <View className="flex-row items-center justify-between px-5 py-3">
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.back()}
+          className="h-10 w-10 items-center justify-center rounded-full bg-field"
         >
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search ingredients"
-            placeholderTextColor="#9a9287"
-            className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
-          />
+          <Ionicons name="chevron-back" size={22} color="#24211d" />
+        </TouchableOpacity>
+        <Text className="text-base font-bold text-ink">Ingredients</Text>
+        <View className="h-10 w-10" />
+      </View>
 
-          <View className="mt-5 rounded-lg border border-line bg-field p-4">
-            <Text className="text-base font-bold text-ink">Save ingredient</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Ingredient name"
-              placeholderTextColor="#9a9287"
-              className="mt-3 rounded-lg border border-line bg-paper px-4 py-3 text-base text-ink"
-            />
-            <View className="mt-3 flex-row gap-3">
+      <KeyboardAwareFlatList
+        data={[
+          {
+            key: "search",
+            render: () => (
               <TextInput
-                value={kcalPer100g}
-                onChangeText={setKcalPer100g}
-                keyboardType="number-pad"
-                placeholder="kcal / 100g"
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search ingredients"
                 placeholderTextColor="#9a9287"
-                className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
+                className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
               />
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={saving}
-                onPress={saveIngredient}
-                className="h-12 w-14 items-center justify-center rounded-lg bg-teal"
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fffdf8" />
-                ) : (
-                  <Ionicons name="add" size={22} color="#fffdf8" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View className="mt-7">
-            <Text className="mb-3 text-lg font-bold text-ink">Saved</Text>
-            {loading ? (
-              <ActivityIndicator color="#2f7f86" />
-            ) : filteredIngredients.length === 0 ? (
-              <View className="rounded-lg border border-dashed border-line bg-field p-6">
-                <Text className="text-center text-sm text-muted">No saved ingredients.</Text>
+            ),
+          },
+          {
+            key: "save-section",
+            render: () => (
+              <View className="mt-5 rounded-lg border border-line bg-field p-4">
+                <Text className="text-base font-bold text-ink">Save ingredient</Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Ingredient name"
+                  placeholderTextColor="#9a9287"
+                  className="mt-3 rounded-lg border border-line bg-paper px-4 py-3 text-base text-ink"
+                />
+                <View className="mt-3 flex-row gap-3">
+                  <TextInput
+                    value={kcalPer100g}
+                    onChangeText={setKcalPer100g}
+                    keyboardType="number-pad"
+                    placeholder="kcal / 100g"
+                    placeholderTextColor="#9a9287"
+                    className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    disabled={saving}
+                    onPress={saveIngredient}
+                    className="h-12 w-14 items-center justify-center rounded-lg bg-teal"
+                  >
+                    {saving ? (
+                      <ActivityIndicator color="#fffdf8" />
+                    ) : (
+                      <Ionicons name="add" size={22} color="#fffdf8" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            ) : (
-              filteredIngredients.map((ingredient) => (
-                <TouchableOpacity
-                  key={ingredient.id}
-                  activeOpacity={0.85}
-                  onPress={() => selectIngredient(ingredient)}
-                  className="mb-3 flex-row items-center justify-between rounded-lg border border-line bg-field p-4"
-                >
-                  <View className="flex-1 pr-4">
-                    <Text className="text-base font-semibold text-ink">{ingredient.name}</Text>
-                    <Text className="mt-1 text-sm text-muted">
-                      {ingredient.kcal_per_100g} kcal / 100g
-                    </Text>
+            ),
+          },
+          {
+            key: "saved-section",
+            render: () => (
+              <View className="mt-7">
+                <Text className="mb-3 text-lg font-bold text-ink">Saved</Text>
+                {loading ? (
+                  <ActivityIndicator color="#2f7f86" />
+                ) : filteredIngredients.length === 0 ? (
+                  <View className="rounded-lg border border-dashed border-line bg-field p-6">
+                    <Text className="text-center text-sm text-muted">No saved ingredients.</Text>
                   </View>
-                  {pickerMode ? (
-                    <Ionicons name="checkmark-circle" size={22} color="#2f7f86" />
-                  ) : (
+                ) : (
+                  filteredIngredients.map((ingredient) => (
                     <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => deleteIngredient(ingredient.id)}
-                      className="h-9 w-9 items-center justify-center rounded-full bg-paper"
+                      key={ingredient.id}
+                      activeOpacity={0.85}
+                      onPress={() => selectIngredient(ingredient)}
+                      className="mb-3 flex-row items-center justify-between rounded-lg border border-line bg-field p-4"
                     >
-                      <Ionicons name="trash-outline" size={18} color="#d95b43" />
+                      <View className="flex-1 pr-4">
+                        <Text className="text-base font-semibold text-ink">{ingredient.name}</Text>
+                        <Text className="mt-1 text-sm text-muted">
+                          {ingredient.kcal_per_100g} kcal / 100g
+                        </Text>
+                      </View>
+                      {pickerMode ? (
+                        <Ionicons name="checkmark-circle" size={22} color="#2f7f86" />
+                      ) : (
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => deleteIngredient(ingredient.id)}
+                          className="h-9 w-9 items-center justify-center rounded-full bg-paper"
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#d95b43" />
+                        </TouchableOpacity>
+                      )}
                     </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+                  ))
+                )}
+              </View>
+            ),
+          },
+        ]}
+        renderItem={({ item }) => item.render()}
+        keyExtractor={(item) => item.key}
+        contentContainerClassName="px-5 pb-8 pt-4"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
