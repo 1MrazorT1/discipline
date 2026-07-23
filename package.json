@@ -10,7 +10,10 @@
     "web": "expo start --web",
     "update:launch": "bash scripts/update-and-launch.sh",
     "security:check": "bash scripts/security-check.sh",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -41,7 +44,13 @@
   },
   "devDependencies": {
     "@babel/core": "^7.26.9",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
+    "jest": "^29.7.0",
+    "react-test-renderer": "^19.2.8",
+    "ts-jest": "^29.4.12",
     "typescript": "^5.3.3"
   }
 }
