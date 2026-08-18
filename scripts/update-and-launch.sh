@@ -20,6 +20,9 @@ npm install --legacy-peer-deps
 echo "Running TypeScript check..."
 npm run typecheck
 
+echo "Running test suite..."
+npm test
+
 echo "Pushing Supabase migrations..."
 supabase db push
 

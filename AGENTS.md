@@ -6,6 +6,7 @@ Applies to all files under the repository root.
 ## Coding Fundamentals
 
 - **TypeScript strict**: All `.ts` / `.tsx` must pass `npm run typecheck`.
+- **Tests**: Run `npm test` (Jest + jest-expo). Add tests for new logic and components. Tests and typecheck must pass before merging — enforced in `security-check.sh` and `update-and-launch.sh`.
 - **Layered architecture**: App (`app/`) → Lib (`lib/`) → Supabase (`supabase/`). Do not leak DB logic into components.
 - **Security first**: Never commit `.env`, service role keys, or NVIDIA keys. Run `npm run security:check` before pushing.
 - **Private storage**: `meals.photo_url` stores private object keys (`meal-photos` bucket), not public URLs.

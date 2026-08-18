@@ -7,6 +7,9 @@ cd "$ROOT_DIR"
 echo "Running TypeScript check..."
 npm run typecheck
 
+echo "Running test suite..."
+npm test
+
 echo "Running production dependency audit..."
 npm audit --omit=dev
 

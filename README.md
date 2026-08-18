@@ -90,6 +90,26 @@ npm run typecheck
 npm run security:check
 ```
 
+## Testing
+
+The project uses [Jest](https://jestjs.io/) with the [`jest-expo`](https://github.com/expo/jest-expo) preset for component and logic tests.
+
+Run the full suite:
+
+```bash
+npm test
+```
+
+Run in watch mode during development:
+
+```bash
+npm run test:watch
+```
+
+- Pure-logic tests (e.g. `lib/dates.test.ts`) run in a Node environment.
+- Component tests (e.g. `components/ProgressRing.test.tsx`) render React Native components headlessly and assert on output / props.
+- `npm test` and `npm run typecheck` are both enforced in `scripts/security-check.sh` and `scripts/update-and-launch.sh`.
+
 ## Notes
 
 - Meal photos are stored in the private `meal-photos` Supabase Storage bucket.
