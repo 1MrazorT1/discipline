@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   PanResponder,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -182,6 +183,12 @@ export default function HomeScreen() {
     });
 
   const openCamera = async () => {
+    if (Platform.OS === "web") {
+      // Web browsers require HTTPS for camera access; redirect to gallery
+      openGallery();
+      return;
+    }
+
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("Camera permission needed", "Enable camera access to capture meals.");

@@ -32,6 +32,11 @@
         "backgroundColor": "#f7f5f0"
       }
     },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "themeColor": "#f7f5f0",
+      "backgroundColor": "#f7f5f0"
+    },
     "plugins": [
       "expo-router",
       [
