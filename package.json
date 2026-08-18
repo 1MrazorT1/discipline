@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "web:build": "expo export --platform web",
+    "web:test": "node scripts/test-web.js",
     "update:launch": "bash scripts/update-and-launch.sh",
     "security:check": "bash scripts/security-check.sh",
     "typecheck": "tsc --noEmit",
@@ -32,7 +33,7 @@
     "expo-status-bar": "~3.0.9",
     "nativewind": "^4.1.23",
     "react": "19.1.0",
-    "react-dom": "19.2.3",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-keyboard-aware-scroll-view": "^0.9.5",
@@ -53,6 +54,7 @@
     "@types/react": "~19.1.10",
     "jest": "^29.7.0",
     "jest-expo": "^57.0.4",
+    "playwright": "^1.62.1",
     "test-renderer": "^1.2.0",
     "typescript": "^5.3.3"
   }
