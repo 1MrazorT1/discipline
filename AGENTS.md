@@ -12,7 +12,7 @@ Applies to all files under the repository root.
 - **Private storage**: `meals.photo_url` stores private object keys (`meal-photos` bucket), not public URLs.
 - **Local builds**: `scripts/build-apk.sh` builds a debug APK locally (portable JDK + Android SDK in `.local-build/`). No sudo or system-wide SDK install required. Sources `.env` so Supabase keys are baked into the JS bundle.
 - **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`) runs `typecheck` + tests on every push/PR. Free tier covers all automated testing.
-- **Agent behavior**: Before editing, confirm target file with user. Reference exact paths (`app/(app)/index.tsx`, `lib/meals.ts`, etc.).
+- **Agent behavior**: Implement directly — confirm only for breaking changes or when unsure about approach.
 - **Commits**: Make meaningful, targeted commits grouped by concern (feat, test, build, chore). Never `git add .` as a blob. Run `npm test` and `npm run typecheck` before every commit. Revert with `git revert <hash>` if a pushed commit breaks main.
 
 ## Git Workflow
