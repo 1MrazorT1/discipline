@@ -27,6 +27,8 @@ jobs:
         run: |
           sed -i 's|href="/_expo/|href="/discipline/_expo/|g; s|src="/_expo/|src="/discipline/_expo/|g; s|href="/favicon.ico"|href="/discipline/favicon.ico"|g' dist/index.html
           cp dist/index.html dist/404.html
+          # GitHub Pages runs Jekyll by default, which ignores _ prefixed dirs
+          touch dist/.nojekyll
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
