@@ -48,6 +48,18 @@ export NODE_ENV=production
 # (2 workers is fine on machines with 4GB+ free RAM, 1 worker for <3GB free)
 export GRADLE_OPTS="-Xmx2g -Dfile.encoding=UTF-8"
 
+# Load env variables (.env) so EXPO_PUBLIC_SUPABASE_* are baked into the JS bundle
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ROOT_DIR/.env"
+  set +a
+  echo "Loaded env variables from .env"
+else
+  echo "WARNING: .env not found — app will not be able to connect to Supabase." >&2
+  echo "  Create .env with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY." >&2
+fi
+
 # 1. Ensure native Android project exists
 if [[ ! -d "$ROOT_DIR/android" ]]; then
   echo "Generating native Android project..."
