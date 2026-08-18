@@ -4,14 +4,12 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setIngredientPicker } from "@/lib/ingredientPicker";
 import { ensureProfile } from "@/lib/onboarding";
@@ -198,122 +196,143 @@ export default function ManualLogScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
-      >
-        <View className="flex-row items-center justify-between px-5 py-3">
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.back()}
-            className="h-10 w-10 items-center justify-center rounded-full bg-field"
-          >
-            <Ionicons name="chevron-back" size={22} color="#24211d" />
-          </TouchableOpacity>
-          <Text className="text-base font-bold text-ink">Manual meal</Text>
-          <View className="h-10 w-10" />
-        </View>
-
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="px-5 pb-8 pt-4"
-          keyboardShouldPersistTaps="handled"
+      <View className="flex-row items-center justify-between px-5 py-3">
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.back()}
+          className="h-10 w-10 items-center justify-center rounded-full bg-field"
         >
-          <Text className="mb-2 text-sm font-semibold text-ink">Meal name</Text>
-          <TextInput
-            value={mealName}
-            onChangeText={setMealName}
-            placeholder="Chicken rice bowl"
-            placeholderTextColor="#9a9287"
-            className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
-          />
+          <Ionicons name="chevron-back" size={22} color="#24211d" />
+        </TouchableOpacity>
+        <Text className="text-base font-bold text-ink">Manual meal</Text>
+        <View className="h-10 w-10" />
+      </View>
 
-          <Text className="mb-2 mt-5 text-sm font-semibold text-ink">Total calories</Text>
-          <TextInput
-            value={totalKcal}
-            onChangeText={setTotalKcal}
-            keyboardType="number-pad"
-            placeholder="650"
-            placeholderTextColor="#9a9287"
-            className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
-          />
+      <KeyboardAwareFlatList
+        data={[
+          {
+            key: "meal-name",
+            render: () => (
+              <>
+                <Text className="mb-2 text-sm font-semibold text-ink">Meal name</Text>
+                <TextInput
+                  value={mealName}
+                  onChangeText={setMealName}
+                  placeholder="Chicken rice bowl"
+                  placeholderTextColor="#9a9287"
+                  className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
+                />
+              </>
+            ),
+          },
+          {
+            key: "total-kcal",
+            render: () => (
+              <>
+                <Text className="mb-2 mt-5 text-sm font-semibold text-ink">Total calories</Text>
+                <TextInput
+                  value={totalKcal}
+                  onChangeText={setTotalKcal}
+                  keyboardType="number-pad"
+                  placeholder="650"
+                  placeholderTextColor="#9a9287"
+                  className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
+                />
+              </>
+            ),
+          },
+          {
+            key: "items-header",
+            render: () => (
+              <View className="mt-7 flex-row items-center justify-between">
+                <Text className="text-lg font-bold text-ink">Items</Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setItems((currentItems) => [...currentItems, newItem()])}
+                  className="h-10 w-10 items-center justify-center rounded-full bg-teal"
+                >
+                  <Ionicons name="add" size={22} color="#fffdf8" />
+                </TouchableOpacity>
+              </View>
+            ),
+          },
+          ...items.map((item, index) => ({
+            key: item.id,
+            render: () => (
+              <View className="mt-4 rounded-lg border border-line bg-field p-4">
+                <View className="mb-3 flex-row items-center justify-between">
+                  <Text className="text-sm font-bold text-ink">Item {index + 1}</Text>
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => openIngredientPicker(item.id)}
+                      className="h-9 w-9 items-center justify-center rounded-full bg-paper"
+                    >
+                      <Ionicons name="search" size={18} color="#2f7f86" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => removeItem(item.id)}
+                      className="h-9 w-9 items-center justify-center rounded-full bg-paper"
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#d95b43" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-          <View className="mt-7 flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-ink">Items</Text>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setItems((currentItems) => [...currentItems, newItem()])}
-              className="h-10 w-10 items-center justify-center rounded-full bg-teal"
-            >
-              <Ionicons name="add" size={22} color="#fffdf8" />
-            </TouchableOpacity>
-          </View>
+                <TextInput
+                  value={item.name}
+                  onChangeText={(value) => updateItem(item.id, { name: value })}
+                  placeholder="Item name"
+                  placeholderTextColor="#9a9287"
+                  className="rounded-lg border border-line bg-paper px-4 py-3 text-base text-ink"
+                />
 
-          {items.map((item, index) => (
-            <View key={item.id} className="mt-4 rounded-lg border border-line bg-field p-4">
-              <View className="mb-3 flex-row items-center justify-between">
-                <Text className="text-sm font-bold text-ink">Item {index + 1}</Text>
-                <View className="flex-row gap-2">
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => openIngredientPicker(item.id)}
-                    className="h-9 w-9 items-center justify-center rounded-full bg-paper"
-                  >
-                    <Ionicons name="search" size={18} color="#2f7f86" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => removeItem(item.id)}
-                    className="h-9 w-9 items-center justify-center rounded-full bg-paper"
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#d95b43" />
-                  </TouchableOpacity>
+                <View className="mt-3 flex-row gap-3">
+                  <TextInput
+                    value={item.grams}
+                    onChangeText={(value) => updateItem(item.id, { grams: value })}
+                    keyboardType="decimal-pad"
+                    placeholder="Grams"
+                    placeholderTextColor="#9a9287"
+                    className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
+                  />
+                  <TextInput
+                    value={item.kcal}
+                    onChangeText={(value) => updateItem(item.id, { kcal: value })}
+                    keyboardType="number-pad"
+                    placeholder="Kcal"
+                    placeholderTextColor="#9a9287"
+                    className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
+                  />
                 </View>
               </View>
-
-              <TextInput
-                value={item.name}
-                onChangeText={(value) => updateItem(item.id, { name: value })}
-                placeholder="Item name"
-                placeholderTextColor="#9a9287"
-                className="rounded-lg border border-line bg-paper px-4 py-3 text-base text-ink"
-              />
-
-              <View className="mt-3 flex-row gap-3">
-                <TextInput
-                  value={item.grams}
-                  onChangeText={(value) => updateItem(item.id, { grams: value })}
-                  keyboardType="decimal-pad"
-                  placeholder="Grams"
-                  placeholderTextColor="#9a9287"
-                  className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
-                />
-                <TextInput
-                  value={item.kcal}
-                  onChangeText={(value) => updateItem(item.id, { kcal: value })}
-                  keyboardType="number-pad"
-                  placeholder="Kcal"
-                  placeholderTextColor="#9a9287"
-                  className="h-12 flex-1 rounded-lg border border-line bg-paper px-4 text-base text-ink"
-                />
-              </View>
-            </View>
-          ))}
-
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={saving}
-            onPress={saveMeal}
-            className="mt-8 h-14 items-center justify-center rounded-lg bg-tomato"
-          >
-            {saving ? (
-              <ActivityIndicator color="#fffdf8" />
-            ) : (
-              <Text className="text-base font-semibold text-white">Save meal</Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            ),
+          })),
+          {
+            key: "save-button",
+            render: () => (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={saving}
+                onPress={saveMeal}
+                className="mt-8 h-14 items-center justify-center rounded-lg bg-tomato"
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fffdf8" />
+                ) : (
+                  <Text className="text-base font-semibold text-white">Save meal</Text>
+                )}
+              </TouchableOpacity>
+            ),
+          },
+        ]}
+        renderItem={({ item }) => item.render()}
+        keyExtractor={(item) => item.key}
+        contentContainerClassName="px-5 pb-8 pt-4"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }

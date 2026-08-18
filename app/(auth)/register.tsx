@@ -2,13 +2,14 @@ import { Link } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 
@@ -70,11 +71,8 @@ export default function RegisterScreen() {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 justify-center bg-paper px-6"
-    >
+  const content = (
+    <>
       <Text className="text-4xl font-bold text-ink">Join Discipline</Text>
       <Text className="mt-2 text-base text-muted">Create your calorie plan.</Text>
 
@@ -128,6 +126,19 @@ export default function RegisterScreen() {
           <Text className="text-sm font-semibold text-teal">I already have an account</Text>
         </TouchableOpacity>
       </Link>
-    </KeyboardAvoidingView>
+    </>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-paper">
+      <KeyboardAwareFlatList
+        data={[{ key: "content", content }]}
+        renderItem={({ item }) => item.content}
+        keyExtractor={(item) => item.key}
+        contentContainerClassName="px-6 justify-center flex-1"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
+    </SafeAreaView>
   );
 }
