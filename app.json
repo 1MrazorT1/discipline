@@ -56,7 +56,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "basename": "/discipline"
+      },
       "eas": {
         "projectId": "55978e7d-a265-44b6-8c88-132665f959f8"
       }
