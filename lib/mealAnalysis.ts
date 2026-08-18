@@ -1,0 +1,110 @@
+/**
+ * Parsing and validation logic for the NVIDIA meal-analysis AI response.
+ *
+ * This module is shared between the client and tested via Jest.
+ * The Supabase Edge Function (`supabase/functions/analyze-meal`) uses
+ * an identical inline copy because it runs on Deno and cannot import
+ * from the app's `lib/` directory at deploy time.
+ */
+
+export type MealAnalysisConfidence = "low" | "medium" | "high";
+
+export type MealAnalysisItem = {
+  name: string;
+  estimated_grams: number | null;
+  estimated_kcal: number;
+  kcal_per_100g: number | null;
+};
+
+export type MealAnalysis = {
+  meal_name: string;
+  items: MealAnalysisItem[];
+  total_kcal: number;
+  confidence: MealAnalysisConfidence;
+};
+
+const CONFIDENCE_VALUES: MealAnalysisConfidence[] = ["low", "medium", "high"];
+
+export const parseMealAnalysis = (content: string): MealAnalysis => {
+  // Strip optional markdown code fences
+  const jsonText = content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("Could not parse meal analysis JSON.");
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed)
+  ) {
+    throw new Error("NVIDIA response did not match the expected meal analysis schema.");
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  if (
+    typeof obj.meal_name !== "string" ||
+    !Array.isArray(obj.items) ||
+    typeof obj.total_kcal !== "number" ||
+    !CONFIDENCE_VALUES.includes(obj.confidence as MealAnalysisConfidence)
+  ) {
+    throw new Error("NVIDIA response did not match the expected meal analysis schema.");
+  }
+
+  const items = obj.items.map((item) => {
+    if (
+      typeof item?.name !== "string" ||
+      typeof item?.estimated_kcal !== "number" ||
+      (item.estimated_grams != null && typeof item.estimated_grams !== "number") ||
+      (item.kcal_per_100g != null && typeof item.kcal_per_100g !== "number")
+    ) {
+      throw new Error("NVIDIA response contained an invalid meal item.");
+    }
+
+    return {
+      name: item.name,
+      estimated_grams: item.estimated_grams ?? null,
+      estimated_kcal: Math.round(item.estimated_kcal),
+      kcal_per_100g: item.kcal_per_100g ?? null,
+    };
+  });
+
+  return {
+    meal_name: obj.meal_name,
+    items,
+    total_kcal: Math.round(obj.total_kcal),
+    confidence: obj.confidence as MealAnalysisConfidence,
+  };
+};
+
+/**
+ * Compute kcal per 100g from estimated_kcal and estimated_grams.
+ * Returns null when grams are unknown or zero.
+ */
+export const computeKcalPer100g = (
+  kcal: number,
+  grams: number | null,
+): number | null => {
+  if (grams === null || grams <= 0) return null;
+  return Math.round((kcal / grams) * 100);
+};
+
+/**
+ * Return the kcal_per_100g value to display for a meal item.
+ * Prefers the AI-provided value; falls back to computing from kcal/grams.
+ */
+export const getKcalPer100g = (
+  itemKcalPer100g: number | null,
+  kcal: number,
+  grams: number | null,
+): number | null => {
+  if (itemKcalPer100g !== null && itemKcalPer100g !== undefined) return itemKcalPer100g;
+  return computeKcalPer100g(kcal, grams);
+};

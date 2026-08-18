@@ -28,6 +28,7 @@ export type MealItem = {
   name: string;
   estimated_grams: number | null;
   estimated_kcal: number;
+  kcal_per_100g: number | null;
   created_at: string;
   updated_at: string;
 };

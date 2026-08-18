@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setIngredientPicker } from "@/lib/ingredientPicker";
+import { getKcalPer100g } from "@/lib/mealAnalysis";
 import { getSignedPhotoUrl } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
 import type { MealItem, MealWithItems, UserIngredient } from "@/types/database";
@@ -52,10 +53,7 @@ const toEditableItem = (item: MealItem): EditableItem => ({
   name: item.name,
   grams: item.estimated_grams === null ? "" : String(item.estimated_grams),
   kcal: String(item.estimated_kcal),
-  kcalPer100g:
-    item.estimated_grams !== null && item.estimated_grams > 0
-      ? (item.estimated_kcal / item.estimated_grams) * 100
-      : undefined,
+  kcalPer100g: getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams) ?? undefined,
 });
 
 const parseKcal = (value: string) => {
@@ -264,10 +262,7 @@ export default function MealDetailScreen() {
   };
 
   const updateInlineGrams = (item: MealItem, grams: string) => {
-    const kcalPer100g =
-      item.estimated_grams !== null && item.estimated_grams > 0
-        ? (item.estimated_kcal / item.estimated_grams) * 100
-        : null;
+    const kcalPer100g = getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams);
 
     updateInlineDraft(item.id, {
       grams,
@@ -779,6 +774,9 @@ export default function MealDetailScreen() {
                           <Text className="text-base font-semibold text-ink">{item.name}</Text>
                           <Text className="mt-1 text-sm text-muted">
                             {item.estimated_grams === null ? "Portion estimated" : `${item.estimated_grams} g`}
+                            {item.kcal_per_100g !== null && item.kcal_per_100g !== undefined
+                              ? ` · ${item.kcal_per_100g} kcal/100g`
+                              : ""}
                           </Text>
                         </View>
                         <View className="items-end">

@@ -13,6 +13,7 @@ type MealAnalysis = {
     name: string;
     estimated_grams: number | null;
     estimated_kcal: number;
+    kcal_per_100g: number | null;
   }>;
   total_kcal: number;
   confidence: "low" | "medium" | "high";
@@ -52,7 +53,8 @@ const parseMealAnalysis = (content: string): MealAnalysis => {
       if (
         typeof item?.name !== "string" ||
         typeof item?.estimated_kcal !== "number" ||
-        (item.estimated_grams !== null && typeof item.estimated_grams !== "number")
+        (item.estimated_grams != null && typeof item.estimated_grams !== "number") ||
+        (item.kcal_per_100g != null && typeof item.kcal_per_100g !== "number")
       ) {
         throw new Error("NVIDIA response contained an invalid meal item.");
       }
@@ -61,6 +63,7 @@ const parseMealAnalysis = (content: string): MealAnalysis => {
         name: item.name,
         estimated_grams: item.estimated_grams ?? null,
         estimated_kcal: Math.round(item.estimated_kcal),
+        kcal_per_100g: item.kcal_per_100g ?? null,
       };
     }),
     total_kcal: Math.round(parsed.total_kcal),
@@ -167,8 +170,11 @@ Deno.serve(async (req) => {
       "Analyze these meal photos for a calorie tracking app called Discipline.",
       "The photos may show the same meal from different angles or close-ups.",
       "Return ONLY valid JSON with this exact shape:",
-      '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number}],"total_kcal":number,"confidence":"low|medium|high"}',
+      '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number,"kcal_per_100g":number|null}],"total_kcal":number,"confidence":"low|medium|high"}',
       "Use null for estimated_grams only when a gram estimate is not possible.",
+      "kcal_per_100g is the calories per 100g of the ingredient (e.g. 165 for chicken breast).",
+      "Provide kcal_per_100g from your nutritional knowledge even when estimated_grams is null.",
+      "Use null for kcal_per_100g only when the food is completely unrecognizable.",
       "Do not include markdown, comments, explanations, or extra keys.",
     ];
 
@@ -257,6 +263,7 @@ Deno.serve(async (req) => {
           name: item.name,
           estimated_grams: item.estimated_grams,
           estimated_kcal: item.estimated_kcal,
+          kcal_per_100g: item.kcal_per_100g,
         })),
       )
       .select();
