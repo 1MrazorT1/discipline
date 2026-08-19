@@ -7,6 +7,7 @@ export const analyzeMeal = async (params: {
   objectKeys?: string[];
   userId: string;
   note?: string;
+  eatenAt?: string;
 }) => {
   const objectKeys = params.objectKeys ?? (params.objectKey ? [params.objectKey] : []);
   const { data, error } = await supabase.functions.invoke("analyze-meal", {
@@ -15,6 +16,7 @@ export const analyzeMeal = async (params: {
       object_keys: objectKeys,
       user_id: params.userId,
       note: params.note,
+      eaten_at: params.eatenAt,
     },
   });
 
@@ -56,6 +58,7 @@ export const startMealAnalysis = async (params: {
   objectKeys: string[];
   userId: string;
   note?: string;
+  eatenAt?: string;
 }): Promise<MealAnalysis> => {
   const {
     data: analysis,
@@ -87,6 +90,7 @@ export const startMealAnalysis = async (params: {
       user_id: params.userId,
       analysis_id: analysis.id,
       note: params.note,
+      eaten_at: params.eatenAt,
     },
   });
 

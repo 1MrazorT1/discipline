@@ -47,6 +47,7 @@ export default function HomeScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingAnalyses, setPendingAnalyses] = useState<MealAnalysis[]>([]);
+  const [deletingMealIds, setDeletingMealIds] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -175,7 +176,7 @@ export default function HomeScreen() {
     [],
   );
 
-  const handlePickedImages = async (uris: string[], noteText?: string) => {
+  const handlePickedImages = async (uris: string[], noteText?: string, eatenAt?: string) => {
     const limitedUris = uris.filter(Boolean).slice(0, 3);
     if (limitedUris.length === 0 || !userId) return;
 
@@ -202,6 +203,7 @@ export default function HomeScreen() {
         objectKeys,
         userId: currentUser.id,
         note: noteText,
+        eatenAt: eatenAt ?? selectedDay.toISOString(),
       });
       setPendingAnalyses((prev) => [analysis, ...prev]);
     } catch (uploadError) {
@@ -209,6 +211,41 @@ export default function HomeScreen() {
       Alert.alert("Could not analyze meal", message);
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const deleteMealFromFeed = async (mealId: string) => {
+    setDeletingMealIds((prev) => new Set(prev).add(mealId));
+    try {
+      const { error: deleteError } = await supabase
+        .from("meals")
+        .delete()
+        .eq("id", mealId);
+
+      if (deleteError) throw deleteError;
+
+      // Also delete associated meal_items (cascade is handled by DB, but
+      // also clean up the photo in storage if present)
+      const meal = meals.find((m) => m.id === mealId);
+      if (meal?.photo_url) {
+        const { error: photoError } = await supabase.storage
+          .from("meal-photos")
+          .remove([meal.photo_url]);
+        if (photoError) console.warn("Photo cleanup failed:", photoError.message);
+      }
+
+      setMeals((prev) => prev.filter((m) => m.id !== mealId));
+    } catch (deleteError) {
+      Alert.alert(
+        "Could not delete meal",
+        deleteError instanceof Error ? deleteError.message : "Try again.",
+      );
+    } finally {
+      setDeletingMealIds((prev) => {
+        const next = new Set(prev);
+        next.delete(mealId);
+        return next;
+      });
     }
   };
 
@@ -271,7 +308,7 @@ export default function HomeScreen() {
 
     const noteText = await promptForNote();
     if (noteText !== null) {
-      await handlePickedImages(uris, noteText);
+      await handlePickedImages(uris, noteText, selectedDay.toISOString());
     }
   };
 
@@ -292,7 +329,7 @@ export default function HomeScreen() {
     if (!result.canceled) {
       const noteText = await promptForNote();
       if (noteText !== null) {
-        await handlePickedImages(result.assets.map((asset) => asset.uri), noteText);
+        await handlePickedImages(result.assets.map((asset) => asset.uri), noteText, selectedDay.toISOString());
       }
     }
   };
@@ -422,6 +459,8 @@ export default function HomeScreen() {
                         params: { id: meal.id },
                       })
                     }
+                    onDelete={() => deleteMealFromFeed(meal.id)}
+                    deleting={deletingMealIds.has(meal.id)}
                   />
                 ))
               )}

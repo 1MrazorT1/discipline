@@ -1,4 +1,5 @@
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { formatTime } from "@/lib/dates";
 import type { MealWithItems } from "@/types/database";
 
@@ -6,6 +7,8 @@ type MealFeedRowProps = {
   meal: MealWithItems;
   signedUrl?: string;
   onPress: () => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 };
 
 const getMealAccent = (eatenAt: string) => {
@@ -22,7 +25,7 @@ const confidenceColor = {
   high: "#3f9c75",
 };
 
-export function MealFeedRow({ meal, signedUrl, onPress }: MealFeedRowProps) {
+export function MealFeedRow({ meal, signedUrl, onPress, onDelete, deleting }: MealFeedRowProps) {
   const accent = getMealAccent(meal.eaten_at);
 
   return (
@@ -71,6 +74,26 @@ export function MealFeedRow({ meal, signedUrl, onPress }: MealFeedRowProps) {
           <Text className="text-xs text-muted">{formatTime(meal.eaten_at)}</Text>
         </View>
       </View>
+      {onDelete ? (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          disabled={deleting}
+          onPress={(e) => {
+            e.stopPropagation();
+            Alert.alert("Delete meal?", "This will remove the meal and its item breakdown.", [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete", style: "destructive", onPress: onDelete },
+            ]);
+          }}
+          className="ml-2 h-8 w-8 items-center justify-center rounded-full bg-field"
+        >
+          {deleting ? (
+            <ActivityIndicator color="#d95b43" size="small" />
+          ) : (
+            <Ionicons name="trash-outline" size={18} color="#d95b43" />
+          )}
+        </TouchableOpacity>
+      ) : null}
     </TouchableOpacity>
   );
 }

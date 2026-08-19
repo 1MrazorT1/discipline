@@ -7,6 +7,7 @@ type AnalyzeMealRequest = {
   analysis_id?: string;
   note?: string;
   retry?: boolean;
+  eaten_at?: string;
 };
 
 type MealAnalysis = {
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
         .filter((key): key is string => typeof key === "string" && key.length > 0),
     ),
   ].slice(0, 3);
-  const { user_id, analysis_id, note } = body;
+  const { user_id, analysis_id, note, eaten_at } = body;
 
   if (objectKeys.length === 0 || !user_id) {
     return jsonResponse(
@@ -316,6 +317,7 @@ Deno.serve(async (req) => {
         confidence: analysis.confidence,
         meal_name: analysis.meal_name,
         user_id,
+        eaten_at: eaten_at ?? new Date().toISOString(),
       })
       .select()
       .single();
