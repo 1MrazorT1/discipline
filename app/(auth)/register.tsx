@@ -11,6 +11,7 @@ import {
 import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ensureProfile } from "@/lib/onboarding";
+import { getAuthRedirectUrl } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 
 export default function RegisterScreen() {
@@ -37,7 +38,7 @@ export default function RegisterScreen() {
       email: email.trim(),
       password,
       options: {
-        emailRedirectTo: "discipline://",
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           full_name: fullName,
           name: fullName,

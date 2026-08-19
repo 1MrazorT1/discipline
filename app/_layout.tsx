@@ -30,12 +30,16 @@ export default function RootLayout() {
   useEffect(() => {
     assertClientEnv();
 
-    const handleAuthUrl = async (url: string | null) => {
+    const handleAuthUrl = async (url: string | null, opts: { returnTo?: string } = {}) => {
       if (!url) return;
 
       const code = getAuthParam(url, "code");
       if (code) {
         await supabase.auth.exchangeCodeForSession(code);
+        const returnTo = opts.returnTo;
+        if (returnTo && typeof window !== "undefined") {
+          sessionStorage.setItem("authReturnTo", returnTo);
+        }
         return;
       }
 
@@ -54,14 +58,36 @@ export default function RootLayout() {
       setReady(true);
     });
 
-    Linking.getInitialURL().then(handleAuthUrl);
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const code = getAuthParam(url, "code");
+        if (code) {
+          handleAuthUrl(url, { returnTo: "/verified" });
+        } else {
+          handleAuthUrl(url);
+        }
+      }
+    });
     const linkListener = Linking.addEventListener("url", ({ url }) => {
-      handleAuthUrl(url);
+      const code = getAuthParam(url, "code");
+      if (code) {
+        handleAuthUrl(url, { returnTo: "/verified" });
+      } else {
+        handleAuthUrl(url);
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setReady(true);
+
+      if (nextSession && typeof window !== "undefined") {
+        const returnTo = sessionStorage.getItem("authReturnTo");
+        if (returnTo) {
+          sessionStorage.removeItem("authReturnTo");
+          router.replace(returnTo as any);
+        }
+      }
     });
 
     return () => {
@@ -74,7 +100,7 @@ export default function RootLayout() {
     if (!ready) return;
 
     const inAuthGroup = segments[0] === "(auth)";
-    if (!session && !inAuthGroup) {
+    if (!session && !inAuthGroup && segments[0] !== "verified") {
       router.replace("/(auth)/login");
     }
 

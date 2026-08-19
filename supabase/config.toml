@@ -1,0 +1,12 @@
+[auth.url_config]
+site_url = "https://example.com/test-redirect-check"
+additional_redirect_urls = [
+  "discipline://",
+]
+
+[storage.vector]
+enabled = false
+max_buckets = 10
+max_indexes = 5
+
+[storage.analytics.buckets]
