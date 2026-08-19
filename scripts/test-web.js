@@ -12,6 +12,26 @@ const BASE_PATH = "/discipline";
  * the `/discipline/` base path. Also create 404.html (SPA fallback)
  * and .nojekyll so GitHub Pages doesn't ignore `_`-prefixed directories.
  */
+function fixAssetPathsInFile(filePath) {
+  let content = fs.readFileSync(filePath, "utf8");
+  let changed = false;
+  // Fix "bare" _expo and assets paths (JS string literals like "/assets/...")
+  if (content.includes('"/_expo/') || content.includes('"/assets/')) {
+    content = content
+      .replace(/"\/_expo\//g, '"/discipline/_expo/')
+      .replace(/"\/assets\//g, '"/discipline/assets/');
+    changed = true;
+  }
+  // Fix URL references in CSS
+  if (content.includes('url(/_expo/') || content.includes('url(/assets/')) {
+    content = content
+      .replace(/url(\/_expo\//g, 'url(/discipline/_expo/')
+      .replace(/url(\/assets\//g, 'url(/discipline/assets/');
+    changed = true;
+  }
+  if (changed) fs.writeFileSync(filePath, content);
+}
+
 function prepareDist() {
   const indexPath = path.join(DIST_DIR, "index.html");
   if (fs.existsSync(indexPath)) {
@@ -24,6 +44,21 @@ function prepareDist() {
       fs.writeFileSync(indexPath, html);
     }
   }
+
+  // Fix hardcoded /assets/ and /_expo/ paths inside JS and CSS bundles
+  const staticDir = path.join(DIST_DIR, "_expo", "static");
+  if (fs.existsSync(staticDir)) {
+    for (const sub of ["js/web", "css"]) {
+      const dir = path.join(staticDir, sub);
+      if (!fs.existsSync(dir)) continue;
+      for (const file of fs.readdirSync(dir)) {
+        if (file.endsWith(".js") || file.endsWith(".css")) {
+          fixAssetPathsInFile(path.join(dir, file));
+        }
+      }
+    }
+  }
+
   // Create 404.html if missing (SPA fallback)
   const notFoundPath = path.join(DIST_DIR, "404.html");
   if (!fs.existsSync(notFoundPath) && fs.existsSync(indexPath)) {

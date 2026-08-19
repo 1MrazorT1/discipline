@@ -26,10 +26,15 @@ jobs:
         run: npm run web:build
         env:
           EXPO_BASE_URL: /discipline
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Fix asset paths for GitHub Pages subdirectory
         run: |
           sed -i 's|href="/_expo/|href="/discipline/_expo/|g; s|src="/_expo/|src="/discipline/_expo/|g; s|href="/favicon.ico"|href="/discipline/favicon.ico"|g' dist/index.html
+          # Fix hardcoded /assets/ paths in JS bundle (fonts, images, etc.)
+          find dist/_expo/static -name "*.js" -exec sed -i 's|"/_expo/|"/discipline/_expo/|g; s|"/assets/|"/discipline/assets/|g' {} +
+          find dist/_expo/static -name "*.css" -exec sed -i 's|/_expo/|/discipline/_expo/|g; s|/assets/|/discipline/assets/|g' {} +
           cp dist/index.html dist/404.html
           # GitHub Pages runs Jekyll by default, which ignores _ prefixed dirs
           touch dist/.nojekyll

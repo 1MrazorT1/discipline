@@ -8,9 +8,13 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
+    // Map Deno-style npm: imports (with optional version) to their npm equivalents.
+    // Handles scoped packages like npm:@supabase/supabase-js@2 → @supabase/supabase-js
+    "^npm:(.+)@v?\\d+$": "$1",
+    "^npm:(.+)$": "$1",
   },
   setupFilesAfterEnv: ["@testing-library/jest-native/extend-expect"],
   testEnvironment: "node",
   testMatch: ["**/*.test.{ts,tsx}"],
-  testPathIgnorePatterns: ["/node_modules/", "/supabase/functions/"],
+  testPathIgnorePatterns: ["/node_modules/"],
 };
