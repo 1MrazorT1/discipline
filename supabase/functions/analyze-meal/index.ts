@@ -233,6 +233,13 @@ Deno.serve(async (req) => {
       "Provide kcal_per_100g from your nutritional knowledge even when estimated_grams is null.",
       "Use null for kcal_per_100g only when the food is completely unrecognizable.",
       "Do not include markdown, comments, explanations, or extra keys.",
+      "",
+      "Grading your estimates:",
+      "- High confidence: you can clearly identify all ingredients and portions.",
+      "- Medium confidence: you can identify most ingredients but some portions are uncertain.",
+      "- Low confidence: the food is partially obscured, ingredients are ambiguous, or portions are very hard to estimate.",
+      "",
+      "For better accuracy, use common reference objects visible in the photo (e.g. a smartphone, coin, or utensil) to scale your gram estimates. When multiple items are present, list each ingredient separately.",
     ];
 
     if (note && note.trim()) {
