@@ -822,6 +822,9 @@ export default function MealDetailScreen() {
                           <View className="flex-1">
                             <Text className="text-base font-semibold text-ink">{item.name}</Text>
                             <Text className="mt-1 text-xs text-muted">Changes save automatically</Text>
+                          <Text className="mt-1 text-xs text-muted">
+                            Changing grams or kcal recalculates the other based on kcal/100g
+                          </Text>
                           </View>
                           {inlineSavingId === item.id ? (
                             <ActivityIndicator color="#2f7f86" />
@@ -878,6 +881,9 @@ export default function MealDetailScreen() {
                             {item.kcal_per_100g !== null && item.kcal_per_100g !== undefined
                               ? ` · ${item.kcal_per_100g} kcal/100g`
                               : ""}
+                          </Text>
+                          <Text className="mt-1 text-xs text-muted">
+                            Tap to adjust grams or kcal (kcal/100g is used for recalculation)
                           </Text>
                         </View>
                         <View className="items-end">

@@ -313,5 +313,41 @@ describe("mealAnalysis", () => {
     it("should return null when AI value is null and kcal_per_100g is zero", () => {
       expect(getEstimatedGrams(null, 100, 0)).toBeNull();
     });
+
+    it("should return AI grams even when kcal_per_100g would give a different result", () => {
+      // AI says 200g, kcal=330, kcal_per_100g=165 → computed would be 200, same
+      expect(getEstimatedGrams(200, 330, 165)).toBe(200);
+      // AI says 100g but computed would be 200 — should prefer AI
+      expect(getEstimatedGrams(100, 330, 165)).toBe(100);
+    });
+  });
+
+  describe("bidirectional kcal/grams conversion", () => {
+    it("should compute kcal from grams and kcal_per_100g", () => {
+      // 150g of food at 165 kcal/100g → 247.5 → 248 kcal
+      expect(Math.round((150 * 165) / 100)).toBe(248);
+    });
+
+    it("should compute grams from kcal and kcal_per_100g", () => {
+      // 248 kcal at 165 kcal/100g → 248*100/165 = 150.3 → 150g
+      expect(computeEstimatedGrams(248, 165)).toBe(150);
+    });
+
+    it("should round-trip: grams → kcal → grams is consistent", () => {
+      const kcalPer100g = 165;
+      const originalGrams = 150;
+      const kcal = Math.round((originalGrams * kcalPer100g) / 100);
+      const roundTripGrams = computeEstimatedGrams(kcal, kcalPer100g);
+      expect(roundTripGrams).toBe(originalGrams);
+    });
+
+    it("should round-trip: kcal → grams → kcal is consistent", () => {
+      const kcalPer100g = 110;
+      const originalKcal = 165;
+      const grams = computeEstimatedGrams(originalKcal, kcalPer100g);
+      expect(grams).not.toBeNull();
+      const roundTripKcal = Math.round((grams! * kcalPer100g) / 100);
+      expect(roundTripKcal).toBe(originalKcal);
+    });
   });
 });
