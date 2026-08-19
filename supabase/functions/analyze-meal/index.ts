@@ -6,6 +6,7 @@ type AnalyzeMealRequest = {
   user_id?: string;
   analysis_id?: string;
   note?: string;
+  retry?: boolean;
 };
 
 type MealAnalysis = {
@@ -135,12 +136,13 @@ Deno.serve(async (req) => {
 
   const updateAnalysisStatus = async (
     status: "processing" | "completed" | "failed",
-    updates: { meal_id?: string; error?: string } = {},
+    updates: { meal_id?: string; error?: string; log?: string } = {},
   ) => {
     if (!analysis_id) return;
     const setClause: Record<string, unknown> = { status };
     if (updates.meal_id !== undefined) setClause.meal_id = updates.meal_id;
     if (updates.error !== undefined) setClause.error = updates.error;
+    if (updates.log !== undefined) setClause.log = updates.log;
 
     try {
       await supabase
@@ -150,6 +152,20 @@ Deno.serve(async (req) => {
         .eq("user_id", user_id);
     } catch (updateError) {
       console.error("Failed to update analysis status:", updateError);
+    }
+  };
+
+  /** Append a log line to the analysis record so the client can show progress. */
+  const appendLog = async (message: string) => {
+    if (!analysis_id) return;
+    try {
+      const { error: logError } = await supabase.rpc("append_analysis_log", {
+        p_analysis_id: analysis_id,
+        p_message: message,
+      });
+      if (logError) console.error("Failed to append analysis log:", logError);
+    } catch (logErr) {
+      console.error("Failed to append analysis log:", logErr);
     }
   };
 
@@ -185,15 +201,18 @@ Deno.serve(async (req) => {
 
     // Mark analysis as processing (if tracking is enabled)
     await updateAnalysisStatus("processing");
+    await appendLog("Starting meal analysis…");
 
     const signedPhotoUrls = [];
     for (const objectKey of objectKeys) {
+      await appendLog(`Creating signed URL for ${objectKey}…`);
       const { data: signedPhoto, error: signedPhotoError } = await supabase.storage
         .from("meal-photos")
         .createSignedUrl(objectKey, 300);
 
       if (signedPhotoError || !signedPhoto?.signedUrl) {
         console.error("Signed photo URL error:", signedPhotoError);
+        await appendLog("Failed to create signed photo URL.");
         await updateAnalysisStatus("failed", {
           error: "Could not create signed photo URL.",
         });
@@ -220,6 +239,8 @@ Deno.serve(async (req) => {
     }
 
     const prompt = promptParts.join("\n");
+
+      await appendLog("Sending photos to NVIDIA NIM for analysis…");
 
     const nvidiaResponse = await fetch(
       "https://integrate.api.nvidia.com/v1/chat/completions",
@@ -256,6 +277,7 @@ Deno.serve(async (req) => {
         status: nvidiaResponse.status,
         body: nvidiaErrorBody,
       });
+      await appendLog(`NVIDIA API returned ${nvidiaResponse.status}.`);
       await updateAnalysisStatus("failed", {
         error: `NVIDIA API returned ${nvidiaResponse.status}.`,
       });
@@ -280,7 +302,11 @@ Deno.serve(async (req) => {
       );
     }
 
+    await appendLog("Parsing AI response…");
+
     const analysis = parseMealAnalysis(content);
+
+    await appendLog("Creating meal record in database…");
 
     const { data: meal, error: mealError } = await supabase
       .from("meals")
@@ -296,6 +322,7 @@ Deno.serve(async (req) => {
 
     if (mealError || !meal) {
       console.error("Meal insert error:", mealError);
+      await appendLog("Failed to create meal record.");
       await updateAnalysisStatus("failed", {
         error: "Could not create meal.",
       });
@@ -317,6 +344,7 @@ Deno.serve(async (req) => {
 
     if (itemsError || !items) {
       console.error("Meal items insert error:", itemsError);
+      await appendLog("Failed to create meal items.");
       await supabase.from("meals").delete().eq("id", meal.id);
       await updateAnalysisStatus("failed", {
         error: "Could not create meal items.",
@@ -325,6 +353,7 @@ Deno.serve(async (req) => {
     }
 
     // Mark analysis as completed with the created meal_id
+    await appendLog("Meal analysis completed successfully.");
     await updateAnalysisStatus("completed", { meal_id: meal.id });
 
     return jsonResponse({ meal: { ...meal, items } });

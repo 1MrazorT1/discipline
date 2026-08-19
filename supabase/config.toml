@@ -1,6 +1,11 @@
-[auth.url_config]
-site_url = "https://example.com/test-redirect-check"
+[auth]
+site_url = "https://1mrazorT1.github.io/discipline"
 additional_redirect_urls = [
+  "https://1mrazorT1.github.io/discipline/",
+  "https://1mrazorT1.github.io/discipline",
+  "http://localhost:19006",
+  "http://localhost:3000",
+  "exp://*",
   "discipline://",
 ]
 

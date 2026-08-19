@@ -147,6 +147,53 @@ export const getPendingAnalyses = async (
   return (data ?? []) as MealAnalysis[];
 };
 
+/**
+ * Retry a failed or pending meal analysis.
+ * Fetches the original analysis record, resets its status to pending,
+ * and re-invokes the analyze-meal Edge Function.
+ */
+export const retryMealAnalysis = async (analysisId: string): Promise<MealAnalysis> => {
+  const { data: existing, error: fetchError } = await supabase
+    .from("meal_analyses")
+    .select("*")
+    .eq("id", analysisId)
+    .single();
+
+  if (fetchError || !existing) {
+    throw new Error("Could not find analysis record to retry.");
+  }
+
+  const { error: resetError } = await supabase
+    .from("meal_analyses")
+    .update({
+      status: "pending",
+      error: null,
+      meal_id: null,
+      log: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", analysisId);
+
+  if (resetError) {
+    throw new Error("Could not reset analysis status.");
+  }
+
+  const updatedAnalysis = { ...(existing as MealAnalysis), status: "pending" as const, error: null, log: null, meal_id: null };
+
+  void supabase.functions.invoke("analyze-meal", {
+    body: {
+      object_key: existing.object_keys[0],
+      object_keys: existing.object_keys,
+      user_id: existing.user_id,
+      analysis_id: existing.id,
+      note: existing.note,
+      retry: true,
+    },
+  });
+
+  return updatedAnalysis;
+};
+
 export const getSignedPhotoUrl = async (objectKey: string): Promise<string> => {
   const { data, error } = await supabase.functions.invoke("get-photo-url", {
     body: {

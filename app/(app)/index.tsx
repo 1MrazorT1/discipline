@@ -19,7 +19,7 @@ import { AvatarDot } from "@/components/AvatarDot";
 import { MealFeedRow } from "@/components/MealFeedRow";
 import { ProgressRing } from "@/components/ProgressRing";
 import { addDays, dayBounds, formatDayTitle, startOfDay } from "@/lib/dates";
-import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, type AnalysisCallbacks } from "@/lib/meals";
+import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, retryMealAnalysis, type AnalysisCallbacks } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 import { uploadMealPhotos } from "@/lib/upload";
@@ -381,9 +381,25 @@ export default function HomeScreen() {
                             ? "AI is reviewing your photos"
                             : "Queued for analysis"}
                         </Text>
+                        {analysis.log ? (
+                          <Text className="mt-1 text-xs text-muted">
+                            {analysis.log.trim().split("\n").pop()}
+                          </Text>
+                        ) : null}
+                        {analysis.status === "failed" && analysis.error ? (
+                          <Text className="mt-1 text-xs text-tomato">
+                            {analysis.error}
+                          </Text>
+                        ) : null}
                       </View>
-                      {analysis.status === "failed" && analysis.error ? (
-                        <Text className="text-xs text-tomato">{analysis.error}</Text>
+                      {analysis.status === "failed" ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() => retryMealAnalysis(analysis.id)}
+                          className="h-9 w-9 items-center justify-center rounded-full bg-paper"
+                        >
+                          <Ionicons name="reload" size={18} color="#2f7f86" />
+                        </TouchableOpacity>
                       ) : null}
                     </View>
                   </View>

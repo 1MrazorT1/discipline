@@ -61,6 +61,7 @@ export type MealAnalysis = {
   status: MealAnalysisStatus;
   meal_id: string | null;
   error: string | null;
+  log: string | null;
   created_at: string;
   updated_at: string;
 };

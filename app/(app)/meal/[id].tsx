@@ -16,9 +16,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setIngredientPicker } from "@/lib/ingredientPicker";
 import { getEstimatedGrams, getKcalPer100g, computeEstimatedGrams } from "@/lib/mealAnalysis";
-import { getSignedPhotoUrl } from "@/lib/meals";
+import { getSignedPhotoUrl, startMealAnalysis } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
-import type { MealItem, MealWithItems, UserIngredient } from "@/types/database";
+import type { MealItem, MealWithItems, UserIngredient, MealAnalysis } from "@/types/database";
 
 type EditableItem = {
   clientId: string;
@@ -88,6 +88,7 @@ export default function MealDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export default function MealDetailScreen() {
   const [totalDraft, setTotalDraft] = useState("");
   const [totalSaving, setTotalSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAnalyses, setPendingAnalyses] = useState<MealAnalysis[]>([]);
 
   const loadMeal = async () => {
     setError(null);
@@ -506,6 +508,32 @@ export default function MealDetailScreen() {
     }
   };
 
+  const retryAnalysis = async () => {
+    if (!meal || !meal.photo_url || retrying) return;
+
+    setRetrying(true);
+    try {
+      // Start a new analysis using the meal's existing photo
+      const analysis = await startMealAnalysis({
+        objectKeys: [meal.photo_url],
+        userId: meal.user_id,
+        note: meal.meal_name,
+      });
+      setPendingAnalyses((prev) => [analysis, ...prev]);
+      // Close the detail and go back to feed where the pending row will show
+      if (analysis.status === "pending") {
+        router.back();
+      }
+    } catch (retryError) {
+      Alert.alert(
+        "Could not re-analyze meal",
+        retryError instanceof Error ? retryError.message : "Try again.",
+      );
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const deleteMeal = async () => {
     if (!meal || deleting) return;
 
@@ -569,6 +597,18 @@ export default function MealDetailScreen() {
           <Text className="text-base font-bold text-ink">Meal</Text>
           {meal && !editing ? (
             <View className="flex-row gap-2">
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={deleting || retrying}
+                onPress={retryAnalysis}
+                className="h-10 w-10 items-center justify-center rounded-full bg-field"
+              >
+                {retrying ? (
+                  <ActivityIndicator color="#2f7f86" />
+                ) : (
+                  <Ionicons name="reload-outline" size={20} color="#2f7f86" />
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
                 disabled={deleting}
