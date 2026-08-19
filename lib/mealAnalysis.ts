@@ -14,6 +14,8 @@ export type MealAnalysisItem = {
   estimated_grams: number | null;
   estimated_kcal: number;
   kcal_per_100g: number | null;
+  volume_ml: number | null;
+  quantity: number | null;
 };
 
 export type MealAnalysis = {
@@ -73,6 +75,8 @@ export const parseMealAnalysis = (content: string): MealAnalysis => {
       estimated_grams: item.estimated_grams ?? computeEstimatedGrams(Math.round(item.estimated_kcal), item.kcal_per_100g ?? null),
       estimated_kcal: Math.round(item.estimated_kcal),
       kcal_per_100g: item.kcal_per_100g ?? null,
+      volume_ml: item.volume_ml ?? null,
+      quantity: item.quantity ?? null,
     };
   });
 

@@ -27,6 +27,8 @@ describe("mealAnalysis", () => {
             estimated_grams: 150,
             estimated_kcal: 330,
             kcal_per_100g: 165,
+            volume_ml: null,
+            quantity: null,
           },
         ],
         total_kcal: 330,
@@ -51,6 +53,8 @@ describe("mealAnalysis", () => {
       const result = parseMealAnalysis(content);
 
       expect(result.items[0].kcal_per_100g).toBeNull();
+      expect(result.items[0].volume_ml).toBeNull();
+      expect(result.items[0].quantity).toBeNull();
     });
 
     it("should handle null kcal_per_100g in AI response", () => {
@@ -181,6 +185,56 @@ describe("mealAnalysis", () => {
       expect(result.items[0].kcal_per_100g).toBe(150);
       expect(result.items[1].kcal_per_100g).toBeNull();
       expect(result.items[2].kcal_per_100g).toBe(900);
+      // New fields default to null when not provided by AI
+      expect(result.items[0].volume_ml).toBeNull();
+      expect(result.items[0].quantity).toBeNull();
+    });
+
+    it("should parse volume_ml and quantity when provided by AI", () => {
+      const content = JSON.stringify({
+        meal_name: "Soup + Eggs",
+        items: [
+          {
+            name: "Chicken Broth",
+            estimated_grams: 240,
+            estimated_kcal: 15,
+            kcal_per_100g: 62,
+            volume_ml: 240,
+            quantity: null,
+          },
+          {
+            name: "Hard-boiled Eggs",
+            estimated_grams: 140,
+            estimated_kcal: 200,
+            kcal_per_100g: 143,
+            volume_ml: null,
+            quantity: 2,
+          },
+        ],
+        total_kcal: 215,
+        confidence: "high",
+      });
+
+      const result = parseMealAnalysis(content);
+      expect(result.items[0].volume_ml).toBe(240);
+      expect(result.items[0].quantity).toBeNull();
+      expect(result.items[1].volume_ml).toBeNull();
+      expect(result.items[1].quantity).toBe(2);
+    });
+
+    it("should default volume_ml and quantity to null when not provided", () => {
+      const content = JSON.stringify({
+        meal_name: "Test",
+        items: [
+          { name: "Food", estimated_grams: 100, estimated_kcal: 130, kcal_per_100g: 130 },
+        ],
+        total_kcal: 130,
+        confidence: "high",
+      });
+
+      const result = parseMealAnalysis(content);
+      expect(result.items[0].volume_ml).toBeNull();
+      expect(result.items[0].quantity).toBeNull();
     });
 
     it("should handle empty items array", () => {
@@ -213,6 +267,8 @@ describe("mealAnalysis", () => {
 
       const result = parseMealAnalysis(content);
       expect(result.items[0].estimated_grams).toBe(150); // (165 * 100) / 110 = 150
+      expect(result.items[0].volume_ml).toBeNull();
+      expect(result.items[0].quantity).toBeNull();
     });
 
     it("should keep estimated_grams as null when both AI grams and kcal_per_100g are null", () => {

@@ -17,6 +17,8 @@ type MealAnalysis = {
     estimated_grams: number | null;
     estimated_kcal: number;
     kcal_per_100g: number | null;
+    volume_ml: number | null;
+    quantity: number | null;
   }>;
   total_kcal: number;
   confidence: "low" | "medium" | "high";
@@ -65,7 +67,9 @@ const parseMealAnalysis = (content: string): MealAnalysis => {
         typeof item?.name !== "string" ||
         typeof item?.estimated_kcal !== "number" ||
         (item.estimated_grams != null && typeof item.estimated_grams !== "number") ||
-        (item.kcal_per_100g != null && typeof item.kcal_per_100g !== "number")
+        (item.kcal_per_100g != null && typeof item.kcal_per_100g !== "number") ||
+        (item.volume_ml != null && typeof item.volume_ml !== "number") ||
+        (item.quantity != null && typeof item.quantity !== "number")
       ) {
         throw new Error("NVIDIA response contained an invalid meal item.");
       }
@@ -77,6 +81,8 @@ const parseMealAnalysis = (content: string): MealAnalysis => {
           item.estimated_grams ?? computeEstimatedGrams(roundedKcal, item.kcal_per_100g ?? null),
         estimated_kcal: roundedKcal,
         kcal_per_100g: item.kcal_per_100g ?? null,
+        volume_ml: item.volume_ml ?? null,
+        quantity: item.quantity ?? null,
       };
     }),
     total_kcal: Math.round(parsed.total_kcal),
@@ -227,11 +233,15 @@ Deno.serve(async (req) => {
       "Analyze these meal photos for a calorie tracking app called Discipline.",
       "The photos may show the same meal from different angles or close-ups.",
       "Return ONLY valid JSON with this exact shape:",
-      '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number,"kcal_per_100g":number|null}],"total_kcal":number,"confidence":"low|medium|high"}',
+      '{"meal_name":"string","items":[{"name":"string","estimated_grams":number,"estimated_kcal":number,"kcal_per_100g":number|null,"volume_ml":number|null,"quantity":number|null}],"total_kcal":number,"confidence":"low|medium|high"}',
       "Use null for estimated_grams only when a gram estimate is not possible.",
       "kcal_per_100g is the calories per 100g of the ingredient (e.g. 165 for chicken breast).",
       "Provide kcal_per_100g from your nutritional knowledge even when estimated_grams is null.",
       "Use null for kcal_per_100g only when the food is completely unrecognizable.",
+      "volume_ml is the volume in milliliters for liquid ingredients (e.g. 240 for 1 cup of milk).",
+      "Use null for volume_ml for non-liquid ingredients.",
+      "quantity is the number of discrete items (e.g. 2 for two eggs, 3 for three chicken wings).",
+      "Use null for quantity when the item is not countable or is a single serving.",
       "Do not include markdown, comments, explanations, or extra keys.",
       "",
       "Grading your estimates:",
@@ -347,6 +357,8 @@ Deno.serve(async (req) => {
           estimated_grams: item.estimated_grams,
           estimated_kcal: item.estimated_kcal,
           kcal_per_100g: item.kcal_per_100g,
+          volume_ml: item.volume_ml,
+          quantity: item.quantity,
         })),
       )
       .select();
