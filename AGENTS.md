@@ -14,6 +14,7 @@ Applies to all files under the repository root.
 - **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`) runs `typecheck` + tests on every push/PR. Free tier covers all automated testing.
 - **Agent behavior**: Implement directly — confirm only for breaking changes or when unsure about approach.
 - **Commits**: Make meaningful, targeted commits grouped by concern (feat, test, build, chore). Never `git add .` as a blob. Run `npm test` and `npm run typecheck` before every commit. Revert with `git revert <hash>` if a pushed commit breaks main.
+- **Supabase changes**: Whenever a new migration (`supabase/migrations/`), Edge Function (`supabase/functions/`), or schema change is added, deploy it to the remote Supabase project using `npx supabase db push` and `npx supabase functions deploy <name>`. Requires `SUPABASE_ACCESS_TOKEN` and `SUPABASE_SERVICE_ROLE_KEY` in `.env` (or the environment). If these secrets are unavailable, leave the deployment to the user and document the required commands.
 
 ## Git Workflow
 

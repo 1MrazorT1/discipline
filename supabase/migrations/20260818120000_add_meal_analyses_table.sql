@@ -41,16 +41,7 @@ create policy "Users can read their own meal analyses"
 on public.meal_analyses
 for select
 to authenticated
-using (
-  user_id = auth.uid()
-  or exists (
-    select 1 from public.profiles
-    where id = auth.uid()
-      and household_id = (
-        select household_id from public.profiles where id = meal_analyses.user_id
-      )
-  )
-);
+using (user_id = auth.uid());
 
 create policy "Users can create their own meal analyses"
 on public.meal_analyses
