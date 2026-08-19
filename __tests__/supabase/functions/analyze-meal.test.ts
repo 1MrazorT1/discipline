@@ -602,7 +602,7 @@ describe("analyze-meal Edge Function", () => {
 
       const call = fetchMock.mock.calls[0];
       const body = JSON.parse(call[1].body);
-      expect(body.model).toBe("meta/llama-4-maverick-17b-128e-instruct");
+      expect(body.model).toBe("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning");
     });
 
     it("should use custom model from NVIDIA_MODEL env", async () => {

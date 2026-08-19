@@ -94,8 +94,8 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const nvidiaApiKey = Deno.env.get("NVIDIA_API_KEY");
-  const nvidiaModel = Deno.env.get("NVIDIA_MODEL") ??
-    "meta/llama-4-maverick-17b-128e-instruct";
+  const nvidiaModel =
+    Deno.env.get("NVIDIA_MODEL") ?? "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 
   if (!supabaseUrl || !supabaseServiceRoleKey || !nvidiaApiKey) {
     return jsonResponse(
@@ -244,7 +244,8 @@ Deno.serve(async (req) => {
             },
           ],
           temperature: 0.2,
-          max_tokens: 1024,
+          max_tokens: 16384,
+          reasoning_budget: 16384,
         }),
       },
     );
