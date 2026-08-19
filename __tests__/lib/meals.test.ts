@@ -1,13 +1,24 @@
-import { analyzeMeal, getSignedPhotoUrl, getSignedPhotoUrls } from '@/lib/meals';
+import { analyzeMeal, getSignedPhotoUrl, getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses } from '@/lib/meals';
 
-// Mock the supabase client
-jest.mock('@/lib/supabase', () => ({
-  supabase: {
-    functions: {
-      invoke: jest.fn(),
+// Mock the supabase client — use a mutable holder so we can access the
+// mock functions from within tests after the jest.mock factory runs.
+jest.mock('@/lib/supabase', () => {
+  const invoke = jest.fn();
+  const from = jest.fn();
+  const channel = jest.fn(() => ({
+    on: jest.fn().mockReturnThis(),
+    subscribe: jest.fn().mockReturnValue('channel'),
+  }));
+  const removeChannel = jest.fn();
+  return {
+    supabase: {
+      functions: { invoke },
+      from,
+      channel,
+      removeChannel,
     },
-  },
-}));
+  };
+});
 
 import { supabase } from '@/lib/supabase';
 
@@ -298,6 +309,177 @@ describe('meals', () => {
       });
 
       await expect(getSignedPhotoUrls(['key1'])).rejects.toThrow('Server error');
+    });
+  });
+
+  describe('startMealAnalysis', () => {
+    it('should create a pending analysis record and invoke the edge function without analysis_id', async () => {
+      const mockAnalysis = {
+        id: 'analysis-123',
+        user_id: 'user1',
+        object_keys: ['meals/user1/photo.jpg'],
+        note: 'Large portion',
+        status: 'pending',
+        meal_id: null,
+        error: null,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      };
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({ data: mockAnalysis, error: null }),
+          }),
+        }),
+        select: jest.fn(),
+        update: jest.fn(),
+      });
+
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      const result = await startMealAnalysis({
+        objectKeys: ['meals/user1/photo.jpg'],
+        userId: 'user1',
+        note: 'Large portion',
+      });
+
+      expect(supabase.from).toHaveBeenCalledWith('meal_analyses');
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('analyze-meal', {
+        body: {
+          object_key: 'meals/user1/photo.jpg',
+          object_keys: ['meals/user1/photo.jpg'],
+          user_id: 'user1',
+          analysis_id: 'analysis-123',
+          note: 'Large portion',
+        },
+      });
+      expect(result).toEqual(mockAnalysis);
+    });
+
+    it('should throw when analysis record creation fails', async () => {
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({ data: null, error: new Error('DB error') }),
+          }),
+        }),
+        select: jest.fn(),
+        update: jest.fn(),
+      });
+
+      await expect(startMealAnalysis({
+        objectKeys: ['meals/user1/photo.jpg'],
+        userId: 'user1',
+      })).rejects.toThrow('DB error');
+    });
+
+    it('should not await the Edge Function invocation (fire-and-forget)', async () => {
+      const mockAnalysis = {
+        id: 'analysis-456',
+        user_id: 'user1',
+        object_keys: ['meals/user1/photo1.jpg', 'meals/user1/photo2.jpg'],
+        note: null,
+        status: 'pending',
+        meal_id: null,
+        error: null,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      };
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({ data: mockAnalysis, error: null }),
+          }),
+        }),
+        select: jest.fn(),
+        update: jest.fn(),
+      });
+
+      // Make the invoke mock hang indefinitely to prove it's not awaited
+      let invokeResolve: (value: any) => void;
+      const invokePromise = new Promise((resolve) => {
+        invokeResolve = resolve;
+      });
+      (supabase.functions.invoke as jest.Mock).mockReturnValue(invokePromise);
+
+      const result = await startMealAnalysis({
+        objectKeys: ['meals/user1/photo1.jpg', 'meals/user1/photo2.jpg'],
+        userId: 'user1',
+      });
+
+      // Should have returned the analysis record without waiting for the invoke
+      expect(result).toEqual(mockAnalysis);
+      expect(supabase.functions.invoke).toHaveBeenCalled();
+
+      // Clean up the hanging promise
+      invokeResolve!({ data: null, error: null });
+    });
+  });
+
+  describe('subscribeToMealAnalyses', () => {
+    it('should create a Realtime channel filtered by user_id', () => {
+      const callbacks = {
+        onUpdated: jest.fn(),
+        onError: jest.fn(),
+      };
+
+      subscribeToMealAnalyses('user1', callbacks);
+
+      expect(supabase.channel).toHaveBeenCalled();
+      const channelCall = (supabase.channel as jest.Mock).mock.calls[0];      expect(channelCall[0]).toContain('meal_analyses');
+      expect(channelCall[0]).toContain('user1');
+    });
+  });
+
+  describe('getPendingAnalyses', () => {
+    it('should query meal_analyses for pending and processing records', async () => {
+      const mockData = [
+        { id: 'a1', status: 'pending', user_id: 'user1' },
+        { id: 'a2', status: 'processing', user_id: 'user1' },
+      ];
+
+      const mockOrder = jest.fn().mockResolvedValue({ data: mockData, error: null });
+      const mockIn = jest.fn().mockReturnValue({ order: mockOrder });
+      const mockEq = jest.fn().mockReturnValue({ in: mockIn });
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        select: jest.fn().mockReturnValue({ eq: mockEq }),
+      });
+
+      const result = await getPendingAnalyses('user1');
+
+      expect(supabase.from).toHaveBeenCalledWith('meal_analyses');
+      expect(result).toEqual(mockData);
+    });
+
+    it('should return empty array when no pending analyses exist', async () => {
+      const mockOrder = jest.fn().mockResolvedValue({ data: [], error: null });
+      const mockIn = jest.fn().mockReturnValue({ order: mockOrder });
+      const mockEq = jest.fn().mockReturnValue({ in: mockIn });
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        select: jest.fn().mockReturnValue({ eq: mockEq }),
+      });
+
+      const result = await getPendingAnalyses('user1');
+      expect(result).toEqual([]);
+    });
+
+    it('should throw error when query fails', async () => {
+      const mockOrder = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Query failed' },
+      });
+      const mockIn = jest.fn().mockReturnValue({ order: mockOrder });
+      const mockEq = jest.fn().mockReturnValue({ in: mockIn });
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        select: jest.fn().mockReturnValue({ eq: mockEq }),
+      });
+
+      await expect(getPendingAnalyses('user1')).rejects.toThrow('Could not load pending analyses');
     });
   });
 });

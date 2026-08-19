@@ -50,3 +50,17 @@ export type DailyProfile = Pick<
   Profile,
   "id" | "name" | "daily_goal_kcal" | "color" | "avatar_url"
 >;
+
+export type MealAnalysisStatus = "pending" | "processing" | "completed" | "failed";
+
+export type MealAnalysis = {
+  id: string;
+  user_id: string;
+  object_keys: string[];
+  note: string | null;
+  status: MealAnalysisStatus;
+  meal_id: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};

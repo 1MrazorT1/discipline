@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   PanResponder,
   Platform,
   RefreshControl,
@@ -18,11 +19,11 @@ import { AvatarDot } from "@/components/AvatarDot";
 import { MealFeedRow } from "@/components/MealFeedRow";
 import { ProgressRing } from "@/components/ProgressRing";
 import { addDays, dayBounds, formatDayTitle, startOfDay } from "@/lib/dates";
-import { analyzeMeal, getSignedPhotoUrls } from "@/lib/meals";
+import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, type AnalysisCallbacks } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 import { uploadMealPhotos } from "@/lib/upload";
-import type { DailyProfile, MealWithItems } from "@/types/database";
+import type { DailyProfile, MealAnalysis, MealWithItems } from "@/types/database";
 
 const getProgressColor = (progress: number) => {
   if (progress > 1) return "#d95b43";
@@ -45,6 +46,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAnalyses, setPendingAnalyses] = useState<MealAnalysis[]>([]);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -99,6 +101,14 @@ export default function HomeScreen() {
       setSignedPhotoUrls({});
     }
 
+    // Fetch pending analyses so we can show "Analyzing…" rows
+    try {
+      const pending = await getPendingAnalyses(currentUser.id);
+      setPendingAnalyses(pending);
+    } catch {
+      setPendingAnalyses([]);
+    }
+
     setLoading(false);
   }, [selectedDay]);
 
@@ -108,6 +118,49 @@ export default function HomeScreen() {
       loadData();
     }, [loadData]),
   );
+
+  // Subscribe to real-time analysis status updates so results appear even
+  // when the user switched away from the app during analysis.
+  useEffect(() => {
+    if (!userId) return;
+
+    const callbacks: AnalysisCallbacks = {
+      onUpdated: (analysis) => {
+        if (analysis.status === "completed" && analysis.meal_id) {
+          // Analysis just completed — reload meals to show the new entry
+          loadData();
+        } else {
+          // Status changed (e.g. processing) — update the pending list
+          setPendingAnalyses((prev) =>
+            prev.map((a) => (a.id === analysis.id ? analysis : a)),
+          );
+        }
+      },
+      onError: (analysis) => {
+        setPendingAnalyses((prev) =>
+          prev.map((a) => (a.id === analysis.id ? analysis : a)),
+        );
+      },
+    };
+
+    const channel = subscribeToMealAnalyses(userId, callbacks);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadData]);
+
+  // Refresh pending analyses when the app returns to the foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && userId) {
+        getPendingAnalyses(userId)
+          .then(setPendingAnalyses)
+          .catch(() => setPendingAnalyses([]));
+      }
+    });
+    return () => subscription.remove();
+  }, [userId]);
 
   const panResponder = useMemo(
     () =>
@@ -141,12 +194,16 @@ export default function HomeScreen() {
       setProfile(currentProfile);
 
       const objectKeys = await uploadMealPhotos(limitedUris);
-      await analyzeMeal({
+
+      // Create an async analysis record + fire the Edge Function without
+      // awaiting it. The function runs server-side and updates the record's
+      // status via Realtime. The client can safely be backgrounded.
+      const analysis = await startMealAnalysis({
         objectKeys,
         userId: currentUser.id,
         note: noteText,
       });
-      await loadData();
+      setPendingAnalyses((prev) => [analysis, ...prev]);
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "Meal analysis failed.";
       Alert.alert("Could not analyze meal", message);
@@ -304,24 +361,55 @@ export default function HomeScreen() {
           <Text className="mb-3 text-lg font-bold text-ink">Meals</Text>
           {loading && meals.length === 0 ? (
             <ActivityIndicator color="#2f7f86" />
-          ) : meals.length === 0 ? (
-            <View className="rounded-lg border border-dashed border-line bg-field p-6">
-              <Text className="text-center text-sm text-muted">No meals logged for this day.</Text>
-            </View>
           ) : (
-            meals.map((meal) => (
-              <MealFeedRow
-                key={meal.id}
-                meal={meal}
-                signedUrl={meal.photo_url ? signedPhotoUrls[meal.photo_url] : undefined}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(app)/meal/[id]",
-                    params: { id: meal.id },
-                  })
-                }
-              />
-            ))
+            <>
+              {/* Pending/async analyses appear as "Analyzing…" rows */}
+              {pendingAnalyses.length > 0 ? (
+                pendingAnalyses.map((analysis) => (
+                  <View
+                    key={`analysis-${analysis.id}`}
+                    className="mb-3 rounded-lg border border-dashed border-line bg-field p-4"
+                  >
+                    <View className="flex-row items-center gap-3">
+                      <ActivityIndicator color="#2f7f86" />
+                      <View className="flex-1">
+                        <Text className="text-sm font-semibold text-ink">
+                          Analyzing your meal…
+                        </Text>
+                        <Text className="mt-1 text-xs text-muted">
+                          {analysis.status === "processing"
+                            ? "AI is reviewing your photos"
+                            : "Queued for analysis"}
+                        </Text>
+                      </View>
+                      {analysis.status === "failed" && analysis.error ? (
+                        <Text className="text-xs text-tomato">{analysis.error}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+              ) : null}
+
+              {meals.length === 0 ? (
+                <View className="rounded-lg border border-dashed border-line bg-field p-6">
+                  <Text className="text-center text-sm text-muted">No meals logged for this day.</Text>
+                </View>
+              ) : (
+                meals.map((meal) => (
+                  <MealFeedRow
+                    key={meal.id}
+                    meal={meal}
+                    signedUrl={meal.photo_url ? signedPhotoUrls[meal.photo_url] : undefined}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(app)/meal/[id]",
+                        params: { id: meal.id },
+                      })
+                    }
+                  />
+                ))
+              )}
+            </>
           )}
         </View>
       </ScrollView>

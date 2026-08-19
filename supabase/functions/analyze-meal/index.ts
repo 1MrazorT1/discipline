@@ -4,6 +4,7 @@ type AnalyzeMealRequest = {
   object_key?: string;
   object_keys?: string[];
   user_id?: string;
+  analysis_id?: string;
   note?: string;
 };
 
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
         .filter((key): key is string => typeof key === "string" && key.length > 0),
     ),
   ].slice(0, 3);
-  const { user_id, note } = body;
+  const { user_id, analysis_id, note } = body;
 
   if (objectKeys.length === 0 || !user_id) {
     return jsonResponse(
@@ -121,6 +122,26 @@ Deno.serve(async (req) => {
       autoRefreshToken: false,
     },
   });
+
+  const updateAnalysisStatus = async (
+    status: "processing" | "completed" | "failed",
+    updates: { meal_id?: string; error?: string } = {},
+  ) => {
+    if (!analysis_id) return;
+    const setClause: Record<string, unknown> = { status };
+    if (updates.meal_id !== undefined) setClause.meal_id = updates.meal_id;
+    if (updates.error !== undefined) setClause.error = updates.error;
+
+    try {
+      await supabase
+        .from("meal_analyses")
+        .update(setClause)
+        .eq("id", analysis_id)
+        .eq("user_id", user_id);
+    } catch (updateError) {
+      console.error("Failed to update analysis status:", updateError);
+    }
+  };
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -152,6 +173,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Mark analysis as processing (if tracking is enabled)
+    await updateAnalysisStatus("processing");
+
     const signedPhotoUrls = [];
     for (const objectKey of objectKeys) {
       const { data: signedPhoto, error: signedPhotoError } = await supabase.storage
@@ -160,6 +184,9 @@ Deno.serve(async (req) => {
 
       if (signedPhotoError || !signedPhoto?.signedUrl) {
         console.error("Signed photo URL error:", signedPhotoError);
+        await updateAnalysisStatus("failed", {
+          error: "Could not create signed photo URL.",
+        });
         return jsonResponse({ error: "Could not create signed photo URL." }, 500);
       }
 
@@ -218,6 +245,9 @@ Deno.serve(async (req) => {
         status: nvidiaResponse.status,
         body: nvidiaErrorBody,
       });
+      await updateAnalysisStatus("failed", {
+        error: `NVIDIA API returned ${nvidiaResponse.status}.`,
+      });
       return jsonResponse(
         {
           error: "Meal analysis failed.",
@@ -230,6 +260,9 @@ Deno.serve(async (req) => {
     const nvidiaPayload = await nvidiaResponse.json();
     const content = nvidiaPayload?.choices?.[0]?.message?.content;
     if (typeof content !== "string") {
+      await updateAnalysisStatus("failed", {
+        error: "NVIDIA returned no text content.",
+      });
       return jsonResponse(
         { error: "Meal analysis failed.", details: "NVIDIA returned no text content." },
         502,
@@ -252,6 +285,9 @@ Deno.serve(async (req) => {
 
     if (mealError || !meal) {
       console.error("Meal insert error:", mealError);
+      await updateAnalysisStatus("failed", {
+        error: "Could not create meal.",
+      });
       return jsonResponse({ error: "Could not create meal." }, 500);
     }
 
@@ -271,12 +307,21 @@ Deno.serve(async (req) => {
     if (itemsError || !items) {
       console.error("Meal items insert error:", itemsError);
       await supabase.from("meals").delete().eq("id", meal.id);
+      await updateAnalysisStatus("failed", {
+        error: "Could not create meal items.",
+      });
       return jsonResponse({ error: "Could not create meal items." }, 500);
     }
+
+    // Mark analysis as completed with the created meal_id
+    await updateAnalysisStatus("completed", { meal_id: meal.id });
 
     return jsonResponse({ meal: { ...meal, items } });
   } catch (error) {
     console.error("Unexpected analyze-meal error:", error);
+    await updateAnalysisStatus("failed", {
+      error: error instanceof Error ? error.message : "Unexpected error.",
+    });
     return jsonResponse(
       { error: "Unexpected error while analyzing meal." },
       500,

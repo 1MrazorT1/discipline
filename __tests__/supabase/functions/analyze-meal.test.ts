@@ -133,6 +133,12 @@ function buildMockClient({
   const itemsSelect = jest.fn().mockResolvedValue(itemsInsertResult);
   const itemsInsert = jest.fn().mockReturnValue({ select: itemsSelect });
 
+  // meal_analyses status updates:
+  // .from("meal_analyses").update({...}).eq("id", id).eq("user_id", userId)
+  const analysisUpdateEq2 = jest.fn().mockResolvedValue({ data: null, error: null });
+  const analysisUpdateEq1 = jest.fn().mockReturnValue({ eq: analysisUpdateEq2 });
+  const analysisUpdate = jest.fn().mockReturnValue({ eq: analysisUpdateEq1 });
+
   const fromMock = jest.fn((table: string) => {
     if (table === "profiles") {
       return { select: profileSelect };
@@ -142,6 +148,9 @@ function buildMockClient({
     }
     if (table === "meal_items") {
       return { insert: itemsInsert };
+    }
+    if (table === "meal_analyses") {
+      return { update: analysisUpdate, select: jest.fn(), insert: jest.fn() };
     }
     return { select: jest.fn(), insert: jest.fn() };
   });
@@ -159,6 +168,9 @@ function buildMockClient({
     mealDelete,
     itemsInsert,
     itemsSelect,
+    analysisUpdate,
+    analysisUpdateEq1,
+    analysisUpdateEq2,
   };
 }
 
@@ -919,6 +931,231 @@ describe("analyze-meal Edge Function", () => {
 
       const body = await getJson(res);
       expect(res.status).toBe(500);
+    });
+  });
+
+  describe("analysis_id status tracking", () => {
+    it("should update analysis status to 'processing' when analysis_id is provided", async () => {
+      const mockClient = buildMockClient({ authUser: { id: "user1" } });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      expect(mockClient.from).toHaveBeenCalledWith("meal_analyses");
+      expect(mockClient.analysisUpdate).toHaveBeenCalled();
+      const updateCall = mockClient.analysisUpdate.mock.calls[0];
+      expect(updateCall[0]).toHaveProperty("status", "processing");
+    });
+
+    it("should update analysis status to 'completed' with meal_id on success", async () => {
+      const mockClient = buildMockClient({ authUser: { id: "user1" } });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      expect(mockClient.analysisUpdate).toHaveBeenCalledTimes(2);
+      const lastUpdateCall = mockClient.analysisUpdate.mock.calls.at(-1);
+      expect(lastUpdateCall[0]).toHaveProperty("status", "completed");
+      expect(lastUpdateCall[0]).toHaveProperty("meal_id", "meal-123");
+    });
+
+    it("should update analysis status to 'failed' when createSignedUrl fails", async () => {
+      const mockClient = buildMockClient({
+        authUser: { id: "user1" },
+        signedPhotoResult: { error: { message: "Storage error" } },
+      });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      expect(mockClient.analysisUpdate).toHaveBeenCalledTimes(2);
+      const failedUpdate = mockClient.analysisUpdate.mock.calls.at(-1);
+      expect(failedUpdate[0]).toHaveProperty("status", "failed");
+      expect(failedUpdate[0]).toHaveProperty("error", "Could not create signed photo URL.");
+    });
+
+    it("should update analysis status to 'failed' when NVIDIA API returns error", async () => {
+      const mockClient = buildMockClient({ authUser: { id: "user1" } });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => "Rate limited",
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const failedUpdate = mockClient.analysisUpdate.mock.calls.at(-1);
+      expect(failedUpdate[0]).toHaveProperty("status", "failed");
+      expect(failedUpdate[0]).toHaveProperty("error", "NVIDIA API returned 429.");
+    });
+
+    it("should update analysis status to 'failed' when meal insert fails", async () => {
+      const mockClient = buildMockClient({
+        authUser: { id: "user1" },
+        mealInsertResult: {
+          data: null,
+          error: new Error("Insert failed"),
+        },
+      });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const failedUpdate = mockClient.analysisUpdate.mock.calls.at(-1);
+      expect(failedUpdate[0]).toHaveProperty("status", "failed");
+      expect(failedUpdate[0]).toHaveProperty("error", "Could not create meal.");
+    });
+
+    it("should not call updateAnalysisStatus when analysis_id is not provided", async () => {
+      const mockClient = buildMockClient({ authUser: { id: "user1" } });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      expect(mockClient.analysisUpdate).not.toHaveBeenCalled();
+    });
+
+    it("should update analysis status to 'failed' on unexpected errors when analysis_id is provided", async () => {
+      // Pass null as the mock client so createClient() returns null
+      // Accessing .auth on null will throw, caught by try/catch → 500
+      setMockSupabaseClient(null);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      const res = await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-123",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const body = await getJson(res);
+      expect(res.status).toBe(500);
+      expect(body.error).toContain("Unexpected error");
+    });
+
+    it("should update analysis status to 'failed' when meal items insert fails", async () => {
+      const mockClient = buildMockClient({
+        authUser: { id: "user1" },
+        itemsInsertResult: {
+          data: null,
+          error: new Error("Items failed"),
+        },
+      });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            analysis_id: "analysis-456",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const failedUpdate = mockClient.analysisUpdate.mock.calls.at(-1);
+      expect(failedUpdate[0]).toHaveProperty("status", "failed");
+      expect(failedUpdate[0]).toHaveProperty("error", "Could not create meal items.");
     });
   });
 
