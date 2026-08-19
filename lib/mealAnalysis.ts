@@ -70,7 +70,7 @@ export const parseMealAnalysis = (content: string): MealAnalysis => {
 
     return {
       name: item.name,
-      estimated_grams: item.estimated_grams ?? null,
+      estimated_grams: item.estimated_grams ?? computeEstimatedGrams(Math.round(item.estimated_kcal), item.kcal_per_100g ?? null),
       estimated_kcal: Math.round(item.estimated_kcal),
       kcal_per_100g: item.kcal_per_100g ?? null,
     };
@@ -97,6 +97,18 @@ export const computeKcalPer100g = (
 };
 
 /**
+ * Compute estimated_grams from estimated_kcal and kcal_per_100g.
+ * Returns null when kcal_per_100g is unknown or zero.
+ */
+export const computeEstimatedGrams = (
+  kcal: number,
+  kcalPer100g: number | null,
+): number | null => {
+  if (kcalPer100g === null || kcalPer100g === undefined || kcalPer100g <= 0) return null;
+  return Math.round((kcal * 100) / kcalPer100g);
+};
+
+/**
  * Return the kcal_per_100g value to display for a meal item.
  * Prefers the AI-provided value; falls back to computing from kcal/grams.
  */
@@ -107,4 +119,17 @@ export const getKcalPer100g = (
 ): number | null => {
   if (itemKcalPer100g !== null && itemKcalPer100g !== undefined) return itemKcalPer100g;
   return computeKcalPer100g(kcal, grams);
+};
+
+/**
+ * Return the estimated_grams value to display for a meal item.
+ * Prefers the AI-provided value; falls back to computing from kcal/kcal_per_100g.
+ */
+export const getEstimatedGrams = (
+  itemGrams: number | null,
+  kcal: number,
+  kcalPer100g: number | null,
+): number | null => {
+  if (itemGrams !== null && itemGrams !== undefined) return itemGrams;
+  return computeEstimatedGrams(kcal, kcalPer100g);
 };

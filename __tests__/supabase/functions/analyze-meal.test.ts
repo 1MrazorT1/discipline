@@ -810,6 +810,49 @@ describe("analyze-meal Edge Function", () => {
       expect(res.status).toBe(500);
       expect(body.error).toContain("Unexpected error");
     });
+
+    it("should back-fill estimated_grams when AI returns null and kcal_per_100g is available", async () => {
+      const mockClient = buildMockClient({ authUser: { id: "user1" } });
+      setMockSupabaseClient(mockClient);
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      const analysisContent = JSON.stringify({
+        meal_name: "Chicken Salad",
+        items: [
+          {
+            name: "Chicken Breast",
+            estimated_grams: null,
+            estimated_kcal: 165,
+            kcal_per_100g: 110,
+          },
+        ],
+        total_kcal: 165,
+        confidence: "high",
+      });
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            { message: { content: analysisContent } },
+          ],
+        }),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: { object_keys: ["meals/user1/photo.jpg"], user_id: "user1" },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      // Verify the back-filled grams were passed to the meal_items insert
+      expect(mockClient.itemsInsert).toHaveBeenCalled();
+      const insertCall = mockClient.itemsInsert.mock.calls[0];
+      const insertedItems = insertCall[0];
+      expect(insertedItems[0].estimated_grams).toBe(150); // (165*100)/110 = 150
+    });
   });
 
   describe("successful meal creation", () => {

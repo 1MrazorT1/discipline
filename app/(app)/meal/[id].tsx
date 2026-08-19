@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setIngredientPicker } from "@/lib/ingredientPicker";
-import { getKcalPer100g } from "@/lib/mealAnalysis";
+import { getEstimatedGrams, getKcalPer100g, computeEstimatedGrams } from "@/lib/mealAnalysis";
 import { getSignedPhotoUrl } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
 import type { MealItem, MealWithItems, UserIngredient } from "@/types/database";
@@ -47,14 +47,18 @@ const newEditableItem = (): EditableItem => ({
   kcal: "",
 });
 
-const toEditableItem = (item: MealItem): EditableItem => ({
-  clientId: item.id,
-  id: item.id,
-  name: item.name,
-  grams: item.estimated_grams === null ? "" : String(item.estimated_grams),
-  kcal: String(item.estimated_kcal),
-  kcalPer100g: getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams) ?? undefined,
-});
+const toEditableItem = (item: MealItem): EditableItem => {
+  const kcalPer100g = getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams) ?? undefined;
+  const grams = getEstimatedGrams(item.estimated_grams ?? null, item.estimated_kcal, kcalPer100g ?? null);
+  return {
+    clientId: item.id,
+    id: item.id,
+    name: item.name,
+    grams: grams === null ? "" : String(grams),
+    kcal: String(item.estimated_kcal),
+    kcalPer100g,
+  };
+};
 
 const parseKcal = (value: string) => {
   const parsed = Number.parseInt(value.trim(), 10);
@@ -114,13 +118,25 @@ export default function MealDetailScreen() {
     setItems(loadedMeal.meal_items.map(toEditableItem));
     setInlineDrafts(
       Object.fromEntries(
-        loadedMeal.meal_items.map((item) => [
-          item.id,
-          {
-            grams: item.estimated_grams === null ? "" : String(item.estimated_grams),
-            kcal: String(item.estimated_kcal),
-          },
-        ]),
+        loadedMeal.meal_items.map((item) => {
+          const kcalPer100g = getKcalPer100g(
+            item.kcal_per_100g,
+            item.estimated_kcal,
+            item.estimated_grams,
+          );
+          const grams = getEstimatedGrams(
+            item.estimated_grams ?? null,
+            item.estimated_kcal,
+            kcalPer100g,
+          );
+          return [
+            item.id,
+            {
+              grams: grams === null ? "" : String(grams),
+              kcal: String(item.estimated_kcal),
+            },
+          ];
+        }),
       ),
     );
 
@@ -241,13 +257,28 @@ export default function MealDetailScreen() {
 
   const startInlineEdit = (item: MealItem) => {
     setInlineEditingId(item.id);
-    setInlineDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [item.id]: currentDrafts[item.id] ?? {
-        grams: item.estimated_grams === null ? "" : String(item.estimated_grams),
-        kcal: String(item.estimated_kcal),
-      },
-    }));
+    setInlineDrafts((currentDrafts) => {
+      const existing = currentDrafts[item.id];
+      if (existing) return currentDrafts;
+
+      const kcalPer100g = getKcalPer100g(
+        item.kcal_per_100g,
+        item.estimated_kcal,
+        item.estimated_grams,
+      );
+      const grams = getEstimatedGrams(
+        item.estimated_grams ?? null,
+        item.estimated_kcal,
+        kcalPer100g,
+      );
+      return {
+        ...currentDrafts,
+        [item.id]: {
+          grams: grams === null ? "" : String(grams),
+          kcal: String(item.estimated_kcal),
+        },
+      };
+    });
   };
 
   const updateInlineDraft = (itemId: string, patch: Partial<InlineDraft>) => {
@@ -270,6 +301,19 @@ export default function MealDetailScreen() {
     });
   };
 
+  const updateInlineKcal = (item: MealItem, kcal: string) => {
+    const kcalPer100g = getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams);
+    const parsedKcal = Number.parseInt(kcal.trim(), 10);
+    const grams = Number.isFinite(parsedKcal) && !Number.isNaN(parsedKcal) && kcalPer100g !== null
+      ? String(computeEstimatedGrams(parsedKcal, kcalPer100g) ?? "")
+      : "";
+
+    updateInlineDraft(item.id, {
+      kcal,
+      ...(grams ? { grams } : {}),
+    });
+  };
+
   const saveInlineItem = async (itemId: string) => {
     if (!meal || inlineSavingId === itemId) return;
 
@@ -282,8 +326,18 @@ export default function MealDetailScreen() {
 
     if (Number.isNaN(parsedGrams)) {
       Alert.alert("Invalid grams", "Item grams must be a positive number.");
+      const kcalPer100g = getKcalPer100g(
+        existingItem.kcal_per_100g,
+        existingItem.estimated_kcal,
+        existingItem.estimated_grams,
+      );
+      const grams = getEstimatedGrams(
+        existingItem.estimated_grams ?? null,
+        existingItem.estimated_kcal,
+        kcalPer100g,
+      );
       updateInlineDraft(itemId, {
-        grams: existingItem.estimated_grams === null ? "" : String(existingItem.estimated_grams),
+        grams: grams === null ? "" : String(grams),
       });
       return;
     }
@@ -758,7 +812,7 @@ export default function MealDetailScreen() {
                           />
                           <TextInput
                             value={inlineDrafts[item.id]?.kcal ?? ""}
-                            onChangeText={(value) => updateInlineDraft(item.id, { kcal: value })}
+                            onChangeText={(value) => updateInlineKcal(item, value)}
                             onBlur={() => saveInlineItem(item.id)}
                             onSubmitEditing={() => saveInlineItem(item.id)}
                             keyboardType="number-pad"
@@ -773,7 +827,14 @@ export default function MealDetailScreen() {
                         <View className="flex-1 pr-4">
                           <Text className="text-base font-semibold text-ink">{item.name}</Text>
                           <Text className="mt-1 text-sm text-muted">
-                            {item.estimated_grams === null ? "Portion estimated" : `${item.estimated_grams} g`}
+                            {(() => {
+                              const grams = getEstimatedGrams(
+                                item.estimated_grams,
+                                item.estimated_kcal,
+                                getKcalPer100g(item.kcal_per_100g, item.estimated_kcal, item.estimated_grams),
+                              );
+                              return grams !== null ? `${grams} g` : "Portion estimated";
+                            })()}
                             {item.kcal_per_100g !== null && item.kcal_per_100g !== undefined
                               ? ` · ${item.kcal_per_100g} kcal/100g`
                               : ""}

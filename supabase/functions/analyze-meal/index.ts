@@ -35,6 +35,14 @@ const jsonResponse = (body: unknown, status = 200) =>
     },
   });
 
+const computeEstimatedGrams = (
+  kcal: number,
+  kcalPer100g: number | null,
+): number | null => {
+  if (kcalPer100g === null || kcalPer100g <= 0) return null;
+  return Math.round((kcal * 100) / kcalPer100g);
+};
+
 const parseMealAnalysis = (content: string): MealAnalysis => {
   const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const parsed = JSON.parse(jsonText) as Partial<MealAnalysis>;
@@ -60,10 +68,12 @@ const parseMealAnalysis = (content: string): MealAnalysis => {
         throw new Error("NVIDIA response contained an invalid meal item.");
       }
 
+      const roundedKcal = Math.round(item.estimated_kcal);
       return {
         name: item.name,
-        estimated_grams: item.estimated_grams ?? null,
-        estimated_kcal: Math.round(item.estimated_kcal),
+        estimated_grams:
+          item.estimated_grams ?? computeEstimatedGrams(roundedKcal, item.kcal_per_100g ?? null),
+        estimated_kcal: roundedKcal,
         kcal_per_100g: item.kcal_per_100g ?? null,
       };
     }),

@@ -1,4 +1,4 @@
-import { parseMealAnalysis, computeKcalPer100g, getKcalPer100g } from "@/lib/mealAnalysis";
+import { parseMealAnalysis, computeKcalPer100g, computeEstimatedGrams, getKcalPer100g, getEstimatedGrams } from "@/lib/mealAnalysis";
 
 describe("mealAnalysis", () => {
   describe("parseMealAnalysis", () => {
@@ -195,6 +195,44 @@ describe("mealAnalysis", () => {
       expect(result.items).toEqual([]);
       expect(result.total_kcal).toBe(0);
     });
+
+    it("should back-fill estimated_grams when AI returns null but kcal_per_100g is provided", () => {
+      const content = JSON.stringify({
+        meal_name: "Chicken",
+        items: [
+          {
+            name: "Chicken Breast",
+            estimated_grams: null,
+            estimated_kcal: 165,
+            kcal_per_100g: 110,
+          },
+        ],
+        total_kcal: 165,
+        confidence: "high",
+      });
+
+      const result = parseMealAnalysis(content);
+      expect(result.items[0].estimated_grams).toBe(150); // (165 * 100) / 110 = 150
+    });
+
+    it("should keep estimated_grams as null when both AI grams and kcal_per_100g are null", () => {
+      const content = JSON.stringify({
+        meal_name: "Unknown",
+        items: [
+          {
+            name: "Mystery Food",
+            estimated_grams: null,
+            estimated_kcal: 100,
+            kcal_per_100g: null,
+          },
+        ],
+        total_kcal: 100,
+        confidence: "low",
+      });
+
+      const result = parseMealAnalysis(content);
+      expect(result.items[0].estimated_grams).toBeNull();
+    });
   });
 
   describe("computeKcalPer100g", () => {
@@ -234,6 +272,46 @@ describe("mealAnalysis", () => {
 
     it("should return null when AI value is null and grams is zero", () => {
       expect(getKcalPer100g(null, 100, 0)).toBeNull();
+    });
+  });
+
+  describe("computeEstimatedGrams", () => {
+    it("should compute grams from kcal and kcal_per_100g", () => {
+      expect(computeEstimatedGrams(165, 110)).toBe(150);
+    });
+
+    it("should return null when kcal_per_100g is null", () => {
+      expect(computeEstimatedGrams(165, null)).toBeNull();
+    });
+
+    it("should return null when kcal_per_100g is zero", () => {
+      expect(computeEstimatedGrams(165, 0)).toBeNull();
+    });
+
+    it("should round to nearest integer", () => {
+      expect(computeEstimatedGrams(200, 133)).toBe(150);
+    });
+
+    it("should handle 100g exactly", () => {
+      expect(computeEstimatedGrams(250, 250)).toBe(100);
+    });
+  });
+
+  describe("getEstimatedGrams", () => {
+    it("should prefer AI-provided grams over computed", () => {
+      expect(getEstimatedGrams(150, 165, 110)).toBe(150);
+    });
+
+    it("should fall back to computed grams when AI value is null", () => {
+      expect(getEstimatedGrams(null, 165, 110)).toBe(150);
+    });
+
+    it("should return null when both AI and computed are unavailable", () => {
+      expect(getEstimatedGrams(null, 100, null)).toBeNull();
+    });
+
+    it("should return null when AI value is null and kcal_per_100g is zero", () => {
+      expect(getEstimatedGrams(null, 100, 0)).toBeNull();
     });
   });
 });
