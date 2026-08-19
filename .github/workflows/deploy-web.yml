@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +24,8 @@ jobs:
 
       - name: Build web app
         run: npm run web:build
+        env:
+          EXPO_BASE_URL: /discipline
 
       - name: Fix asset paths for GitHub Pages subdirectory
         run: |

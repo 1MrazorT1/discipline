@@ -56,3 +56,4 @@ jest-cache/
 expo-env.d.ts
 # @end expo-cli
 web-live-test.png
+dist-web-screenshot.png

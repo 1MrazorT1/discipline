@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "web:build": "expo export --platform web",
+    "web:build": "EXPO_BASE_URL=/discipline expo export --platform web",
     "web:test": "node scripts/test-web.js",
     "update:launch": "bash scripts/update-and-launch.sh",
     "security:check": "bash scripts/security-check.sh",
