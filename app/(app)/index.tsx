@@ -22,7 +22,7 @@ import { addDays, dayBounds, formatDayTitle, startOfDay } from "@/lib/dates";
 import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, retryMealAnalysis, type AnalysisCallbacks } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
-import { uploadMealPhotos } from "@/lib/upload";
+import { uploadMealPhotos, type UploadProgress } from "@/lib/upload";
 import type { DailyProfile, MealAnalysis, MealWithItems } from "@/types/database";
 
 const getProgressColor = (progress: number) => {
@@ -45,6 +45,7 @@ export default function HomeScreen() {
   const [signedPhotoUrls, setSignedPhotoUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAnalyses, setPendingAnalyses] = useState<MealAnalysis[]>([]);
   const [deletingMealIds, setDeletingMealIds] = useState<Set<string>>(new Set());
@@ -194,7 +195,7 @@ export default function HomeScreen() {
       setUserId(currentUser.id);
       setProfile(currentProfile);
 
-      const objectKeys = await uploadMealPhotos(limitedUris);
+      const objectKeys = await uploadMealPhotos(limitedUris, setUploadProgress);
 
       // Create an async analysis record + fire the Edge Function without
       // awaiting it. The function runs server-side and updates the record's
@@ -211,6 +212,7 @@ export default function HomeScreen() {
       Alert.alert("Could not analyze meal", message);
     } finally {
       setAnalyzing(false);
+      setUploadProgress(null);
     }
   };
 
@@ -498,6 +500,21 @@ export default function HomeScreen() {
           <Text className="mt-1 text-xs font-semibold text-white">Manual</Text>
         </TouchableOpacity>
       </View>
+
+      {uploadProgress ? (
+        <View className="absolute bottom-24 left-0 right-0 items-center">
+          <View className="rounded-lg border border-line bg-field px-4 py-2">
+            <Text className="text-xs text-muted">
+              Uploading photo {uploadProgress.current} of {uploadProgress.total}
+              {uploadProgress.status === "error"
+                ? ` · ${uploadProgress.error}`
+                : uploadProgress.status === "done"
+                ? " ✓"
+                : ""}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {!isToday(selectedDay) && (
         <TouchableOpacity

@@ -7,6 +7,15 @@ type PresignResponse = {
   objectKey: string;
 };
 
+export type UploadProgress = {
+  current: number;
+  total: number;
+  uri: string;
+  objectKey?: string;
+  status: "uploading" | "done" | "error";
+  error?: string;
+};
+
 export const uploadMealPhoto = async (uri: string): Promise<string> => {
   const compressed = await ImageManipulator.manipulateAsync(
     uri,
@@ -59,12 +68,31 @@ export const uploadMealPhoto = async (uri: string): Promise<string> => {
   return presigned.objectKey;
 };
 
-export const uploadMealPhotos = async (uris: string[]): Promise<string[]> => {
+export const uploadMealPhotos = async (
+  uris: string[],
+  onProgress?: (progress: UploadProgress) => void,
+): Promise<string[]> => {
   const limitedUris = uris.slice(0, 3);
-  const objectKeys = [];
+  const objectKeys: string[] = [];
 
-  for (const uri of limitedUris) {
-    objectKeys.push(await uploadMealPhoto(uri));
+  for (let i = 0; i < limitedUris.length; i++) {
+    const uri = limitedUris[i];
+    onProgress?.({ current: i + 1, total: limitedUris.length, uri, status: "uploading" });
+
+    try {
+      const objectKey = await uploadMealPhoto(uri);
+      objectKeys.push(objectKey);
+      onProgress?.({ current: i + 1, total: limitedUris.length, uri, status: "done", objectKey });
+    } catch (err) {
+      onProgress?.({
+        current: i + 1,
+        total: limitedUris.length,
+        uri,
+        status: "error",
+        error: err instanceof Error ? err.message : "Upload failed",
+      });
+      throw err;
+    }
   }
 
   return objectKeys;
