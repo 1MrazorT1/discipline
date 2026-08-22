@@ -295,6 +295,27 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               ),
             },
+            {
+              key: "privacy-link",
+              render: () => (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => router.push("/(app)/privacy")}
+                  className="mt-6 flex-row items-center justify-center gap-2"
+                >
+                  <Ionicons name="shield-outline" size={18} color="#2f7f86" />
+                  <Text className="text-sm font-semibold text-ink">Privacy Policy</Text>
+                </TouchableOpacity>
+              ),
+            },
+            {
+              key: "version",
+              render: () => (
+                <Text className="mt-8 text-center text-xs text-muted">
+                  Discipline v{require("../../package.json").version}
+                </Text>
+              ),
+            },
           ]}
           renderItem={({ item }) => item.render()}
           keyExtractor={(item) => item.key}
