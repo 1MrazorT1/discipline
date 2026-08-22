@@ -19,7 +19,7 @@ import { AvatarDot } from "@/components/AvatarDot";
 import { MealFeedRow } from "@/components/MealFeedRow";
 import { ProgressRing } from "@/components/ProgressRing";
 import { addDays, dayBounds, formatDayTitle, getEffectiveDailyGoal, startOfDay } from "@/lib/dates";
-import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, retryMealAnalysis, type AnalysisCallbacks } from "@/lib/meals";
+import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, retryMealAnalysis, bulkAnalyzePhotos, type AnalysisCallbacks } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 import { uploadMealPhotos, type UploadProgress } from "@/lib/upload";
@@ -49,6 +49,8 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pendingAnalyses, setPendingAnalyses] = useState<MealAnalysis[]>([]);
   const [deletingMealIds, setDeletingMealIds] = useState<Set<string>>(new Set());
+  const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -278,6 +280,60 @@ export default function HomeScreen() {
       );
     });
 
+  const openBulkAnalyze = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Gallery permission needed", "Enable photo access to bulk analyze meals.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 30,
+      quality: 0.82,
+    });
+
+    if (result.canceled || result.assets.length === 0) return;
+
+    const today = new Date();
+    const start = today.toISOString().split("T")[0];
+    const end = today.toISOString().split("T")[0];
+
+    const noteText = await promptForNote();
+    const note = noteText !== null ? noteText : undefined;
+
+    const uris = result.assets.map((a) => a.uri);
+    setBulkAnalyzing(true);
+    setBulkProgress({ current: 0, total: Math.ceil(uris.length / 3) });
+
+    try {
+      const summary = await bulkAnalyzePhotos({
+        uris,
+        userId: userId ?? "",
+        startDate: start,
+        endDate: end,
+        note,
+        onProgress: (current, total) => setBulkProgress({ current, total }),
+      });
+
+      Alert.alert(
+        "Bulk analysis complete",
+        `${summary.started} meals started` +
+          (summary.failed > 0 ? `, ${summary.failed} failed` : "") +
+          ". Check the feed for results.",
+      );
+    } catch (err) {
+      Alert.alert(
+        "Bulk analysis failed",
+        err instanceof Error ? err.message : "Try again.",
+      );
+    } finally {
+      setBulkAnalyzing(false);
+      setBulkProgress(null);
+    }
+  };
+
   const openCamera = async () => {
     if (Platform.OS === "web") {
       // Web browsers require HTTPS for camera access; redirect to gallery
@@ -358,7 +414,22 @@ export default function HomeScreen() {
             label={profile?.name ?? "Me"}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={openBulkAnalyze}
+          className="h-8 w-8 items-center justify-center rounded-full bg-field"
+        >
+          <Ionicons name="images-outline" size={18} color="#2f7f86" />
+        </TouchableOpacity>
       </View>
+
+      {bulkAnalyzing && bulkProgress && (
+        <View className="px-5 pb-2">
+          <Text className="text-sm text-ink">
+            Bulk analyzing: {bulkProgress.current}/{bulkProgress.total} meals
+          </Text>
+        </View>
+      )}
 
       <ScrollView
         className="flex-1"

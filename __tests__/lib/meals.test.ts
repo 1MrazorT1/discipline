@@ -1,4 +1,4 @@
-import { analyzeMeal, getSignedPhotoUrl, getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses } from '@/lib/meals';
+import { analyzeMeal, getSignedPhotoUrl, getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, bulkAnalyzePhotos } from '@/lib/meals';
 
 // Mock the supabase client — use a mutable holder so we can access the
 // mock functions from within tests after the jest.mock factory runs.
@@ -20,7 +20,13 @@ jest.mock('@/lib/supabase', () => {
   };
 });
 
+// Mock upload so bulkAnalyzePhotos tests don't hit the filesystem
+jest.mock('@/lib/upload', () => ({
+  uploadMealPhotos: jest.fn(),
+}));
+
 import { supabase } from '@/lib/supabase';
+import { uploadMealPhotos } from '@/lib/upload';
 
 describe('meals', () => {
   beforeEach(() => {
@@ -480,6 +486,137 @@ describe('meals', () => {
       });
 
       await expect(getPendingAnalyses('user1')).rejects.toThrow('Could not load pending analyses');
+    });
+  });
+
+  describe('bulkAnalyzePhotos', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should split photos into groups of 3 and start an analysis for each', async () => {
+      (uploadMealPhotos as jest.Mock).mockImplementation(async (uris: string[]) =>
+        uris.map((_, i) => `meals/object-key-${i}`),
+      );
+
+      const mockAnalysis = {
+        id: 'analysis-1',
+        user_id: 'user1',
+        object_keys: ['meals/object-key-0'],
+        note: null,
+        status: 'pending',
+        meal_id: null,
+        error: null,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      };
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({ data: mockAnalysis, error: null }),
+          }),
+        }),
+      });
+
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      const uris = ['uri0', 'uri1', 'uri2', 'uri3', 'uri4', 'uri5', 'uri6'];
+      const result = await bulkAnalyzePhotos({
+        uris,
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-03',
+      });
+
+      // 7 photos → ceil(7/3) = 3 meal groups
+      expect(result.started).toBe(3);
+      expect(result.failed).toBe(0);
+      expect(uploadMealPhotos).toHaveBeenCalledTimes(3);
+      expect(supabase.from).toHaveBeenCalledWith('meal_analyses');
+    });
+
+    it('should return {started: 0, failed: 0} for empty uris', async () => {
+      const result = await bulkAnalyzePhotos({
+        uris: [],
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-01',
+      });
+      expect(result).toEqual({ started: 0, failed: 0 });
+    });
+
+    it('should count failures when upload or analysis fails', async () => {
+      (uploadMealPhotos as jest.Mock).mockRejectedValue(new Error('Upload failed'));
+
+      const result = await bulkAnalyzePhotos({
+        uris: ['uri0'],
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-01',
+      });
+
+      expect(result.started).toBe(0);
+      expect(result.failed).toBe(1);
+    });
+
+    it('should call onProgress callback during processing', async () => {
+      (uploadMealPhotos as jest.Mock).mockResolvedValue(['key1']);
+      const mockAnalysis = {
+        id: 'a1', user_id: 'user1', object_keys: ['key1'], note: null,
+        status: 'pending', meal_id: null, error: null,
+        created_at: '2025-01-01', updated_at: '2025-01-01',
+      };
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({ data: mockAnalysis, error: null }),
+          }),
+        }),
+      });
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      const progressCalls: number[] = [];
+      await bulkAnalyzePhotos({
+        uris: ['uri0', 'uri1', 'uri2', 'uri3'],
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-01',
+        onProgress: (current, total) => { progressCalls.push(current); expect(total).toBe(2); },
+      });
+
+      expect(progressCalls).toEqual([1, 2, 2]);
+    });
+
+    it('should distribute meals across the date range', async () => {
+      (uploadMealPhotos as jest.Mock).mockResolvedValue(['key1']);
+
+      const mockInsert = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({
+            data: {
+              id: 'a1', user_id: 'user1', object_keys: ['key1'], note: null,
+              status: 'pending', meal_id: null, error: null,
+              created_at: '2025-01-01', updated_at: '2025-01-01',
+            },
+            error: null,
+          }),
+        }),
+      });
+
+      (supabase.from as jest.Mock).mockReturnValue({ insert: mockInsert });
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      await bulkAnalyzePhotos({
+        uris: ['uri0', 'uri1', 'uri2', 'uri3', 'uri4', 'uri5', 'uri6', 'uri7', 'uri8', 'uri9'],
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-03',
+      });
+
+      // 10 photos → 4 meal groups; verify insert called 4 times
+      expect(mockInsert).toHaveBeenCalledTimes(4);
     });
   });
 });

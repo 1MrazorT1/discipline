@@ -1,6 +1,7 @@
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { MealAnalysis } from "@/types/database";
+import { uploadMealPhotos } from "@/lib/upload";
 
 export const analyzeMeal = async (params: {
   objectKey?: string;
@@ -260,4 +261,76 @@ export const getSignedPhotoUrls = async (
   }
 
   return data.urls as Record<string, string>;
+};
+
+/**
+ * Bulk-analyze meal photos by date range (Issue #10).
+ *
+ * Uploads all provided photo URIs, groups them into individual meals
+ * (one photo = one meal, up to 3 photos per meal), and starts an
+ * async analysis for each. Meals are distributed evenly across the
+ * given date range.
+ *
+ * Returns a summary of how many analyses were started.
+ */
+export const bulkAnalyzePhotos = async (params: {
+  uris: string[];
+  userId: string;
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
+  note?: string;
+  onProgress?: (current: number, total: number) => void;
+}): Promise<{ started: number; failed: number }> => {
+  const {
+    uris,
+    userId,
+    startDate,
+    endDate,
+    note,
+    onProgress,
+  } = params;
+
+  const validUris = uris.filter(Boolean);
+  if (validUris.length === 0) {
+    return { started: 0, failed: 0 };
+  }
+
+  // Split into meal groups of up to 3 photos each
+  const mealGroups: string[][] = [];
+  for (let i = 0; i < validUris.length; i += 3) {
+    mealGroups.push(validUris.slice(i, i + 3));
+  }
+
+  const total = mealGroups.length;
+  const startDt = new Date(startDate);
+  const endDt = new Date(endDate);
+  const daysCount = Math.max(1, Math.ceil((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+  let started = 0;
+  let failed = 0;
+
+  for (let i = 0; i < mealGroups.length; i++) {
+    onProgress?.(i + 1, total);
+
+    try {
+      // Distribute meals evenly across the date range
+      const dayOffset = Math.floor((i / total) * daysCount);
+      const mealDate = new Date(startDt);
+      mealDate.setDate(mealDate.getDate() + dayOffset);
+
+      const objectKeys = await uploadMealPhotos(mealGroups[i]);
+      await startMealAnalysis({
+        objectKeys,
+        userId,
+        note: note || undefined,
+        eatenAt: mealDate.toISOString(),
+      });
+      started++;
+    } catch {
+      failed++;
+    }
+  }
+
+  onProgress?.(total, total);
+  return { started, failed };
 };
