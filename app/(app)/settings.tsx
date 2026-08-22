@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   Text,
   TextInput,
@@ -15,6 +17,7 @@ import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AvatarDot } from "@/components/AvatarDot";
 import { supabase } from "@/lib/supabase";
+import { uploadMealPhoto } from "@/lib/upload";
 import type { Profile } from "@/types/database";
 
 const colors = ["#3f9c75", "#d95b43", "#2f7f86", "#d6a23a", "#6d6bb3"];
@@ -26,6 +29,9 @@ export default function SettingsScreen() {
   const [color, setColor] = useState(colors[0]);
   const [effectiveDate, setEffectiveDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarObjectKey, setAvatarObjectKey] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +64,17 @@ export default function SettingsScreen() {
         } else {
           setEffectiveDate(new Date());
         }
+        if (nextProfile.avatar_url) {
+          // Load avatar preview — avatar_url stores private storage keys
+          try {
+            const { data: signed } = await supabase.storage
+              .from("meal-photos")
+              .createSignedUrl(nextProfile.avatar_url, 86400);
+            if (signed?.signedUrl) setAvatarUri(signed.signedUrl);
+          } catch {
+            // Silently ignore — fall back to AvatarDot
+          }
+        }
       }
 
       setLoading(false);
@@ -88,6 +105,7 @@ export default function SettingsScreen() {
         name: fullName,
         daily_goal_kcal: parsedGoal,
         color,
+        avatar_url: avatarObjectKey ?? profile.avatar_url,
         effective_date: effectiveDate?.toISOString().split("T")[0],
         updated_at: new Date().toISOString(),
       })
@@ -96,6 +114,35 @@ export default function SettingsScreen() {
     setSaving(false);
     if (error) Alert.alert("Could not save settings", error.message);
     else router.back();
+  };
+
+  const pickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Enable photo access to set an avatar.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const uri = result.assets[0]?.uri;
+    if (!uri) return;
+
+    setAvatarUri(uri);
+    setUploadingAvatar(true);
+    try {
+      const objectKey = await uploadMealPhoto(uri);
+      setAvatarObjectKey(objectKey);
+    } catch (err) {
+      Alert.alert("Upload failed", err instanceof Error ? err.message : "Try again.");
+      setAvatarUri(null);
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   const signOut = async () => {
@@ -129,7 +176,25 @@ export default function SettingsScreen() {
               key: "avatar",
               render: () => (
                 <View className="items-center">
-                  <AvatarDot color={color} label={name || "Me"} size={72} />
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} className="h-20 w-20 rounded-full" />
+                  ) : (
+                    <AvatarDot color={color} label={name || "Me"} size={72} />
+                  )}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    disabled={uploadingAvatar}
+                    onPress={pickAvatar}
+                    className="mt-3 rounded-lg bg-field px-4 py-2"
+                  >
+                    {uploadingAvatar ? (
+                      <ActivityIndicator color="#2f7f86" />
+                    ) : (
+                      <Text className="text-sm font-semibold text-ink">
+                        {avatarUri ? "Change avatar" : "Set avatar"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               ),
             },

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Image,
   PanResponder,
   Platform,
   RefreshControl,
@@ -100,7 +101,10 @@ export default function HomeScreen() {
       .filter((objectKey): objectKey is string => Boolean(objectKey));
 
     try {
-      setSignedPhotoUrls(await getSignedPhotoUrls(objectKeys));
+      const allKeys = profile?.avatar_url
+        ? [...objectKeys, profile.avatar_url]
+        : objectKeys;
+      setSignedPhotoUrls(await getSignedPhotoUrls(allKeys));
     } catch {
       setSignedPhotoUrls({});
     }
@@ -409,10 +413,19 @@ export default function HomeScreen() {
           <Text className="mt-1 text-2xl font-bold text-ink">{formatDayTitle(selectedDay)}</Text>
         </View>
         <TouchableOpacity activeOpacity={0.8} onPress={() => router.push("/(app)/settings")}>
-          <AvatarDot
-            color={profile?.color}
-            label={profile?.name ?? "Me"}
-          />
+          {profile?.avatar_url ? (
+            <Image
+              source={{
+                uri: signedPhotoUrls[profile.avatar_url],
+              }}
+              className="h-10 w-10 rounded-full"
+            />
+          ) : (
+            <AvatarDot
+              color={profile?.color}
+              label={profile?.name ?? "Me"}
+            />
+          )}
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.8}
