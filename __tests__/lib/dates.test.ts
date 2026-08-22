@@ -1,4 +1,4 @@
-import { startOfDay, addDays, dayBounds, formatDayTitle, formatTime } from '@/lib/dates';
+import { startOfDay, addDays, dayBounds, formatDayTitle, formatTime, getEffectiveDailyGoal } from '@/lib/dates';
 
 describe('dates', () => {
   describe('startOfDay', () => {
@@ -179,6 +179,33 @@ describe('dates', () => {
       const iso = new Date('2024-03-15T12:00:00.000').toISOString();
       const result = formatTime(iso);
       expect(result).toBeTruthy();
+    });
+  });
+
+  describe('getEffectiveDailyGoal', () => {
+    it('should return the user goal when no effective_date is set', () => {
+      expect(getEffectiveDailyGoal(1800, null, new Date('2024-03-15'))).toBe(1800);
+    });
+
+    it('should return the user goal when selected day is on or after effective date', () => {
+      const goal = 1800;
+      const effDate = '2024-03-15';
+      expect(getEffectiveDailyGoal(goal, effDate, new Date('2024-03-15T10:00:00.000'))).toBe(goal);
+      expect(getEffectiveDailyGoal(goal, effDate, new Date('2024-03-20T10:00:00.000'))).toBe(goal);
+    });
+
+    it('should return default 2000 when selected day is before effective date (Issue #19)', () => {
+      const goal = 1800;
+      const effDate = '2024-03-20';
+      expect(getEffectiveDailyGoal(goal, effDate, new Date('2024-03-15'))).toBe(2000);
+    });
+
+    it('should return default 2000 when daily goal is undefined and no effective date', () => {
+      expect(getEffectiveDailyGoal(undefined, null, new Date('2024-03-15'))).toBe(2000);
+    });
+
+    it('should return the user goal when effective date is invalid', () => {
+      expect(getEffectiveDailyGoal(1800, 'invalid', new Date('2024-03-15'))).toBe(1800);
     });
   });
 });

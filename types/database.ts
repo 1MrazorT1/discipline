@@ -6,6 +6,8 @@ export type Profile = {
   daily_goal_kcal: number;
   color: string | null;
   avatar_url: string | null;
+  household_id: string | null;
+  effective_date: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -54,7 +56,7 @@ export type UserIngredient = {
 
 export type DailyProfile = Pick<
   Profile,
-  "id" | "name" | "daily_goal_kcal" | "color" | "avatar_url"
+  "id" | "name" | "daily_goal_kcal" | "color" | "avatar_url" | "effective_date"
 >;
 
 export type MealAnalysisStatus = "pending" | "processing" | "completed" | "failed";

@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { KeyboardAwareFlatList } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AvatarDot } from "@/components/AvatarDot";
@@ -22,6 +24,8 @@ export default function SettingsScreen() {
   const [name, setName] = useState("");
   const [dailyGoal, setDailyGoal] = useState("2000");
   const [color, setColor] = useState(colors[0]);
+  const [effectiveDate, setEffectiveDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -48,6 +52,12 @@ export default function SettingsScreen() {
         setName(nextProfile.name ?? "");
         setDailyGoal(String(nextProfile.daily_goal_kcal));
         setColor(nextProfile.color ?? colors[0]);
+        if (nextProfile.effective_date) {
+          const d = new Date(nextProfile.effective_date);
+          if (!Number.isNaN(d.getTime())) setEffectiveDate(d);
+        } else {
+          setEffectiveDate(new Date());
+        }
       }
 
       setLoading(false);
@@ -78,6 +88,7 @@ export default function SettingsScreen() {
         name: fullName,
         daily_goal_kcal: parsedGoal,
         color,
+        effective_date: effectiveDate?.toISOString().split("T")[0],
         updated_at: new Date().toISOString(),
       })
       .eq("id", profile.id);
@@ -150,6 +161,34 @@ export default function SettingsScreen() {
                     placeholderTextColor="#9a9287"
                     className="rounded-lg border border-line bg-field px-4 py-4 text-base text-ink"
                   />
+                </>
+              ),
+            },
+            {
+              key: "effective-date",
+              render: () => (
+                <>
+                  <Text className="mb-2 mt-5 text-sm font-semibold text-ink">Budget effective date</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setShowDatePicker(true)}
+                    className="rounded-lg border border-line bg-field px-4 py-4"
+                  >
+                    <Text className="text-base text-ink">
+                      {effectiveDate ? effectiveDate.toLocaleDateString() : "Pick a date"}
+                    </Text>
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={effectiveDate ?? new Date()}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      onChange={(_, selectedDate) => {
+                        setShowDatePicker(false);
+                        if (selectedDate) setEffectiveDate(selectedDate);
+                      }}
+                    />
+                  )}
                 </>
               ),
             },

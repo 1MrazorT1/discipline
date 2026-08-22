@@ -54,6 +54,7 @@ export const ensureProfile = async (params: {
       daily_goal_kcal: 2000,
       color: defaultColor,
       avatar_url: null,
+      effective_date: new Date().toISOString().split("T")[0],
     })
     .select("*")
     .single();

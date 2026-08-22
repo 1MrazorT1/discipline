@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AvatarDot } from "@/components/AvatarDot";
 import { MealFeedRow } from "@/components/MealFeedRow";
 import { ProgressRing } from "@/components/ProgressRing";
-import { addDays, dayBounds, formatDayTitle, startOfDay } from "@/lib/dates";
+import { addDays, dayBounds, formatDayTitle, getEffectiveDailyGoal, startOfDay } from "@/lib/dates";
 import { getSignedPhotoUrls, startMealAnalysis, subscribeToMealAnalyses, getPendingAnalyses, retryMealAnalysis, type AnalysisCallbacks } from "@/lib/meals";
 import { ensureProfile } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
@@ -337,7 +337,11 @@ export default function HomeScreen() {
   };
 
   const totalKcal = meals.reduce((sum, meal) => sum + meal.total_kcal, 0);
-  const dailyGoal = profile?.daily_goal_kcal ?? 2000;
+  const dailyGoal = getEffectiveDailyGoal(
+    profile?.daily_goal_kcal,
+    profile?.effective_date ?? null,
+    selectedDay,
+  );
   const progress = totalKcal / Math.max(dailyGoal, 1);
   const progressColor = getProgressColor(progress);
 
