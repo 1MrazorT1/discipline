@@ -71,6 +71,15 @@ echo "Building debug APK..."
 cd "$ROOT_DIR/android"
 ./gradlew assembleDebug --no-daemon --max-workers=2
 
+# 3. Copy the APK to a well-named location
+APP_NAME="discipline-debug.apk"
+OUTPUT_DIR="$ROOT_DIR/.local-build"
+mkdir -p "$OUTPUT_DIR"
+cp "$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk" "$OUTPUT_DIR/$APP_NAME"
+
 echo ""
 echo "✓ APK built successfully:"
 ls -lh "$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+echo ""
+echo "✓ Renamed copy:"
+ls -lh "$OUTPUT_DIR/$APP_NAME"
