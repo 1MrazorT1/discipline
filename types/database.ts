@@ -44,6 +44,10 @@ export type UserIngredient = {
   user_id: string;
   name: string;
   kcal_per_100g: number;
+  photo_url: string | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
   created_at: string;
   updated_at: string;
 };

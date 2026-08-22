@@ -11,6 +11,10 @@ describe('ingredientPicker', () => {
     user_id: 'user1',
     name: 'Chicken Breast',
     kcal_per_100g: 165,
+    photo_url: null,
+    protein_g: null,
+    carbs_g: null,
+    fat_g: null,
     created_at: '2024-01-01',
     updated_at: '2024-01-01',
   };
