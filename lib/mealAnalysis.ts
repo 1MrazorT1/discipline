@@ -25,6 +25,21 @@ export type MealAnalysis = {
   confidence: MealAnalysisConfidence;
 };
 
+/**
+ * A pre-logged ingredient from the seeded reference table (Issue #13).
+ * These are common ingredients with known nutrition values that users
+ * can quickly select without creating a custom one.
+ */
+export type PreLoggedIngredient = {
+  id: string;
+  name: string;
+  kcal_per_100g: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  unit: "g" | "ml";
+};
+
 const CONFIDENCE_VALUES: MealAnalysisConfidence[] = ["low", "medium", "high"];
 
 export const parseMealAnalysis = (content: string): MealAnalysis => {
@@ -136,4 +151,55 @@ export const getEstimatedGrams = (
 ): number | null => {
   if (itemGrams !== null && itemGrams !== undefined) return itemGrams;
   return computeEstimatedGrams(kcal, kcalPer100g);
+};
+
+/**
+ * Fuzzy-match a pre-logged ingredient by name.
+ * Returns the best match or null if no close match is found.
+ * Used to enrich AI-analyzed meal items with known nutrition data.
+ */
+export const matchPreLoggedIngredient = (
+  name: string,
+  candidates: PreLoggedIngredient[],
+): PreLoggedIngredient | null => {
+  const normalized = name.toLowerCase().trim();
+  if (!normalized) return null;
+
+  // Exact match (case-insensitive)
+  const exact = candidates.find((c) => c.name.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  // Partial match: ingredient name contains search term or vice versa
+  const partial = candidates.find(
+    (c) => c.name.toLowerCase().includes(normalized) || normalized.includes(c.name.toLowerCase()),
+  );
+  if (partial) return partial;
+
+  return null;
+};
+
+/**
+ * Enrich a meal analysis item with nutrition data from a pre-logged ingredient.
+ * If a match is found, fills in missing kcal_per_100g, protein, carbs, and fat.
+ */
+export const enrichWithPreLogged = (
+  item: MealAnalysisItem,
+  preLogged: PreLoggedIngredient | null,
+): MealAnalysisItem & { protein_g: number | null; carbs_g: number | null; fat_g: number | null } => {
+  if (!preLogged) {
+    return {
+      ...item,
+      protein_g: null,
+      carbs_g: null,
+      fat_g: null,
+    };
+  }
+
+  return {
+    ...item,
+    kcal_per_100g: item.kcal_per_100g ?? preLogged.kcal_per_100g,
+    protein_g: preLogged.protein_g,
+    carbs_g: preLogged.carbs_g,
+    fat_g: preLogged.fat_g,
+  };
 };

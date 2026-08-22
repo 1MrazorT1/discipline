@@ -1,4 +1,13 @@
-import { parseMealAnalysis, computeKcalPer100g, computeEstimatedGrams, getKcalPer100g, getEstimatedGrams } from "@/lib/mealAnalysis";
+import {
+  parseMealAnalysis,
+  computeKcalPer100g,
+  computeEstimatedGrams,
+  getKcalPer100g,
+  getEstimatedGrams,
+  matchPreLoggedIngredient,
+  enrichWithPreLogged,
+} from "@/lib/mealAnalysis";
+import type { PreLoggedIngredient } from "@/lib/mealAnalysis";
 
 describe("mealAnalysis", () => {
   describe("parseMealAnalysis", () => {
@@ -375,6 +384,94 @@ describe("mealAnalysis", () => {
       expect(getEstimatedGrams(200, 330, 165)).toBe(200);
       // AI says 100g but computed would be 200 — should prefer AI
       expect(getEstimatedGrams(100, 330, 165)).toBe(100);
+    });
+  });
+
+  describe("matchPreLoggedIngredient", () => {
+    const candidates: PreLoggedIngredient[] = [
+      { id: "1", name: "Chicken breast (cooked)", kcal_per_100g: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6, unit: "g" },
+      { id: "2", name: "Brown rice (cooked)", kcal_per_100g: 112, protein_g: 2.6, carbs_g: 23, fat_g: 0.8, unit: "g" },
+      { id: "3", name: "Milk (whole)", kcal_per_100g: 64, protein_g: 3.4, carbs_g: 4.8, fat_g: 3.6, unit: "ml" },
+    ];
+
+    it("should find an exact match (case-insensitive)", () => {
+      expect(matchPreLoggedIngredient("chicken breast (cooked)", candidates)?.id).toBe("1");
+    });
+
+    it("should partially match when search term is a substring of candidate name", () => {
+      expect(matchPreLoggedIngredient("chicken", candidates)?.id).toBe("1");
+    });
+
+    it("should partially match when candidate name is a substring of search term", () => {
+      expect(matchPreLoggedIngredient("chicken breast (cooked) extra", candidates)?.id).toBe("1");
+    });
+
+    it("should return null when no match is found", () => {
+      expect(matchPreLoggedIngredient("dragon fruit", candidates)).toBeNull();
+    });
+
+    it("should return null for empty search term", () => {
+      expect(matchPreLoggedIngredient("", candidates)).toBeNull();
+    });
+  });
+
+  describe("enrichWithPreLogged", () => {
+    const preLogged: PreLoggedIngredient = {
+      id: "1",
+      name: "Chicken breast (cooked)",
+      kcal_per_100g: 165,
+      protein_g: 31,
+      carbs_g: 0,
+      fat_g: 3.6,
+      unit: "g",
+    };
+
+    it("should fill in missing kcal_per_100g from pre-logged ingredient", () => {
+      const item = {
+        name: "Chicken breast",
+        estimated_grams: 150,
+        estimated_kcal: 330,
+        kcal_per_100g: null,
+        volume_ml: null,
+        quantity: null,
+      };
+
+      const enriched = enrichWithPreLogged(item, preLogged);
+      expect(enriched.kcal_per_100g).toBe(165);
+      expect(enriched.protein_g).toBe(31);
+      expect(enriched.carbs_g).toBe(0);
+      expect(enriched.fat_g).toBe(3.6);
+    });
+
+    it("should prefer AI-provided kcal_per_100g over pre-logged", () => {
+      const item = {
+        name: "Chicken breast",
+        estimated_grams: 150,
+        estimated_kcal: 330,
+        kcal_per_100g: 155,
+        volume_ml: null,
+        quantity: null,
+      };
+
+      const enriched = enrichWithPreLogged(item, preLogged);
+      expect(enriched.kcal_per_100g).toBe(155);
+    });
+
+    it("should return null nutrition fields when no pre-logged match", () => {
+      const item = {
+        name: "Mystery Food",
+        estimated_grams: 100,
+        estimated_kcal: 200,
+        kcal_per_100g: null,
+        volume_ml: null,
+        quantity: null,
+      };
+
+      const enriched = enrichWithPreLogged(item, null);
+      expect(enriched.kcal_per_100g).toBeNull();
+      expect(enriched.protein_g).toBeNull();
+      expect(enriched.carbs_g).toBeNull();
+      expect(enriched.fat_g).toBeNull();
     });
   });
 
