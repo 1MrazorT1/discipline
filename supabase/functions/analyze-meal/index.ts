@@ -8,6 +8,7 @@ type AnalyzeMealRequest = {
   note?: string;
   retry?: boolean;
   eaten_at?: string;
+  meal_weight_grams?: number | null;
 };
 
 type MealAnalysis = {
@@ -125,7 +126,7 @@ Deno.serve(async (req) => {
         .filter((key): key is string => typeof key === "string" && key.length > 0),
     ),
   ].slice(0, 3);
-  const { user_id, analysis_id, note, eaten_at } = body;
+  const { user_id, analysis_id, note, eaten_at, meal_weight_grams } = body;
 
   if (objectKeys.length === 0 || !user_id) {
     return jsonResponse(
@@ -254,6 +255,10 @@ Deno.serve(async (req) => {
 
     if (note && note.trim()) {
       promptParts.push(`Additional context from the user: ${note.trim()}`);
+    }
+
+    if (meal_weight_grams != null && meal_weight_grams > 0) {
+      promptParts.push(`The user reports the total weight of this meal is approximately ${Math.round(meal_weight_grams)}g. Use this as a constraint: the sum of your estimated_grams for all items should be close to this total weight.`);
     }
 
     const prompt = promptParts.join("\n");

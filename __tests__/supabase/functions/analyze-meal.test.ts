@@ -662,6 +662,64 @@ describe("analyze-meal Edge Function", () => {
       expect(prompt).toContain("Large portion, I was very hungry");
     });
 
+    it("should include meal_weight_grams in prompt when provided", async () => {
+      setMockSupabaseClient(
+        buildMockClient({ authUser: { id: "user1" } }),
+      );
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+            meal_weight_grams: 350,
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const call = fetchMock.mock.calls[0];
+      const body = JSON.parse(call[1].body);
+      const prompt = body.messages[0].content[0].text;
+      expect(prompt).toContain("350g");
+      expect(prompt).toContain("total weight");
+    });
+
+    it("should not include meal weight guidance in prompt when meal_weight_grams is not provided", async () => {
+      setMockSupabaseClient(
+        buildMockClient({ authUser: { id: "user1" } }),
+      );
+      handler = loadEdgeFunction("@/supabase/functions/analyze-meal/index");
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => JSON.parse(VALID_NVIDIA_RESPONSE),
+      });
+
+      await handler(
+        makeRequest("http://localhost:9000/analyze-meal", {
+          method: "POST",
+          body: {
+            object_keys: ["meals/user1/photo.jpg"],
+            user_id: "user1",
+          },
+          headers: { Authorization: "Bearer token" },
+        }),
+      );
+
+      const call = fetchMock.mock.calls[0];
+      const body = JSON.parse(call[1].body);
+      const prompt = body.messages[0].content[0].text;
+      expect(prompt).not.toContain("total weight");
+    });
+
     it("should return 502 when NVIDIA API returns an error", async () => {
       setMockSupabaseClient(
         buildMockClient({ authUser: { id: "user1" } }),

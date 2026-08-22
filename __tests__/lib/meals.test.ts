@@ -422,6 +422,64 @@ describe('meals', () => {
       // Clean up the hanging promise
       invokeResolve!({ data: null, error: null });
     });
+
+    it('should store meal_weight_grams in the analysis record and pass it to the Edge Function', async () => {
+      const mockAnalysis = {
+        id: 'analysis-789',
+        user_id: 'user1',
+        object_keys: ['meals/user1/photo.jpg'],
+        note: 'Note text',
+        meal_weight_grams: 350,
+        status: 'pending',
+        meal_id: null,
+        error: null,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      };
+
+      const mockInsert = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: mockAnalysis, error: null }),
+        }),
+      });
+
+      (supabase.from as jest.Mock).mockReturnValue({
+        insert: mockInsert,
+        select: jest.fn(),
+        update: jest.fn(),
+      });
+
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      await startMealAnalysis({
+        objectKeys: ['meals/user1/photo.jpg'],
+        userId: 'user1',
+        note: 'Note text',
+        eatenAt: '2025-01-15T12:00:00Z',
+        mealWeightGrams: 350,
+      });
+
+      // Verify meal_weight_grams is included in the insert
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          meal_weight_grams: 350,
+          note: 'Note text',
+        }),
+      );
+
+      // Verify eaten_at and meal_weight_grams are passed to the Edge Function
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('analyze-meal', {
+        body: {
+          object_key: 'meals/user1/photo.jpg',
+          object_keys: ['meals/user1/photo.jpg'],
+          user_id: 'user1',
+          analysis_id: 'analysis-789',
+          note: 'Note text',
+          eaten_at: '2025-01-15T12:00:00Z',
+          meal_weight_grams: 350,
+        },
+      });
+    });
   });
 
   describe('subscribeToMealAnalyses', () => {
@@ -617,6 +675,40 @@ describe('meals', () => {
 
       // 10 photos → 4 meal groups; verify insert called 4 times
       expect(mockInsert).toHaveBeenCalledTimes(4);
+    });
+
+    it('should pass mealWeightGrams to startMealAnalysis', async () => {
+      (uploadMealPhotos as jest.Mock).mockResolvedValue(['key1']);
+
+      const mockInsert = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({
+            data: {
+              id: 'a1', user_id: 'user1', object_keys: ['key1'], note: null,
+              meal_weight_grams: 400, status: 'pending', meal_id: null, error: null,
+              created_at: '2025-01-01', updated_at: '2025-01-01',
+            },
+            error: null,
+          }),
+        }),
+      });
+
+      (supabase.from as jest.Mock).mockReturnValue({ insert: mockInsert });
+      (supabase.functions.invoke as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+      await bulkAnalyzePhotos({
+        uris: ['uri0', 'uri1', 'uri2', 'uri3', 'uri4'],
+        userId: 'user1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-01',
+        mealWeightGrams: 400,
+      });
+
+      // 2 meal groups → 2 inserts, each should include meal_weight_grams
+      expect(mockInsert).toHaveBeenCalledTimes(2);
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ meal_weight_grams: 400 }),
+      );
     });
   });
 });

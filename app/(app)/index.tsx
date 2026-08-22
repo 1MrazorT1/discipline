@@ -183,7 +183,12 @@ export default function HomeScreen() {
     [],
   );
 
-  const handlePickedImages = async (uris: string[], noteText?: string, eatenAt?: string) => {
+  const handlePickedImages = async (
+    uris: string[],
+    noteText?: string,
+    eatenAt?: string,
+    mealWeightGrams?: number | null,
+  ) => {
     const limitedUris = uris.filter(Boolean).slice(0, 3);
     if (limitedUris.length === 0 || !userId) return;
 
@@ -203,14 +208,12 @@ export default function HomeScreen() {
 
       const objectKeys = await uploadMealPhotos(limitedUris, setUploadProgress);
 
-      // Create an async analysis record + fire the Edge Function without
-      // awaiting it. The function runs server-side and updates the record's
-      // status via Realtime. The client can safely be backgrounded.
       const analysis = await startMealAnalysis({
         objectKeys,
         userId: currentUser.id,
         note: noteText,
         eatenAt: eatenAt ?? selectedDay.toISOString(),
+        mealWeightGrams,
       });
       setPendingAnalyses((prev) => [analysis, ...prev]);
     } catch (uploadError) {
@@ -284,6 +287,28 @@ export default function HomeScreen() {
       );
     });
 
+  const promptForMealWeight = (): Promise<number | null> =>
+    new Promise((resolve) => {
+      Alert.prompt(
+        "Meal weight (optional)",
+        "Enter the total weight of the meal in grams (e.g. 350). This helps the AI give more accurate estimates.",
+        [
+          { text: "Skip", style: "cancel", onPress: () => resolve(null) },
+          {
+            text: "OK",
+            style: "default",
+            onPress: (text?: string) => {
+              const parsed = Number.parseFloat(text?.trim() ?? "");
+              resolve(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+            },
+          },
+        ],
+        "plain-text",
+        "",
+        "decimal-pad",
+      );
+    });
+
   const openBulkAnalyze = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -306,6 +331,7 @@ export default function HomeScreen() {
 
     const noteText = await promptForNote();
     const note = noteText !== null ? noteText : undefined;
+    const mealWeight = await promptForMealWeight();
 
     const uris = result.assets.map((a) => a.uri);
     setBulkAnalyzing(true);
@@ -318,6 +344,7 @@ export default function HomeScreen() {
         startDate: start,
         endDate: end,
         note,
+        mealWeightGrams: mealWeight,
         onProgress: (current, total) => setBulkProgress({ current, total }),
       });
 
@@ -370,7 +397,8 @@ export default function HomeScreen() {
 
     const noteText = await promptForNote();
     if (noteText !== null) {
-      await handlePickedImages(uris, noteText, selectedDay.toISOString());
+      const mealWeight = await promptForMealWeight();
+      await handlePickedImages(uris, noteText, selectedDay.toISOString(), mealWeight);
     }
   };
 
@@ -391,7 +419,8 @@ export default function HomeScreen() {
     if (!result.canceled) {
       const noteText = await promptForNote();
       if (noteText !== null) {
-        await handlePickedImages(result.assets.map((asset) => asset.uri), noteText, selectedDay.toISOString());
+        const mealWeight = await promptForMealWeight();
+        await handlePickedImages(result.assets.map((asset) => asset.uri), noteText, selectedDay.toISOString(), mealWeight);
       }
     }
   };

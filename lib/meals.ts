@@ -9,6 +9,7 @@ export const analyzeMeal = async (params: {
   userId: string;
   note?: string;
   eatenAt?: string;
+  mealWeightGrams?: number | null;
 }) => {
   const objectKeys = params.objectKeys ?? (params.objectKey ? [params.objectKey] : []);
   const { data, error } = await supabase.functions.invoke("analyze-meal", {
@@ -18,6 +19,7 @@ export const analyzeMeal = async (params: {
       user_id: params.userId,
       note: params.note,
       eaten_at: params.eatenAt,
+      meal_weight_grams: params.mealWeightGrams,
     },
   });
 
@@ -60,6 +62,7 @@ export const startMealAnalysis = async (params: {
   userId: string;
   note?: string;
   eatenAt?: string;
+  mealWeightGrams?: number | null;
 }): Promise<MealAnalysis> => {
   const {
     data: analysis,
@@ -70,6 +73,7 @@ export const startMealAnalysis = async (params: {
       user_id: params.userId,
       object_keys: params.objectKeys,
       note: params.note ?? null,
+      meal_weight_grams: params.mealWeightGrams ?? null,
       status: "pending",
     })
     .select()
@@ -81,9 +85,6 @@ export const startMealAnalysis = async (params: {
     );
   }
 
-  // Fire the Edge Function. We deliberately do NOT await this — the function
-  // runs server-side and will update the analysis row regardless of whether
-  // the client stays connected. The client tracks progress via Realtime.
   void supabase.functions.invoke("analyze-meal", {
     body: {
       object_key: params.objectKeys[0],
@@ -92,6 +93,7 @@ export const startMealAnalysis = async (params: {
       analysis_id: analysis.id,
       note: params.note,
       eaten_at: params.eatenAt,
+      meal_weight_grams: params.mealWeightGrams,
     },
   });
 
@@ -193,6 +195,7 @@ export const retryMealAnalysis = async (analysisId: string): Promise<MealAnalysi
       analysis_id: existing.id,
       note: existing.note,
       retry: true,
+      meal_weight_grams: existing.meal_weight_grams,
     },
   });
 
@@ -279,6 +282,7 @@ export const bulkAnalyzePhotos = async (params: {
   startDate: string; // ISO date string
   endDate: string; // ISO date string
   note?: string;
+  mealWeightGrams?: number | null;
   onProgress?: (current: number, total: number) => void;
 }): Promise<{ started: number; failed: number }> => {
   const {
@@ -287,6 +291,7 @@ export const bulkAnalyzePhotos = async (params: {
     startDate,
     endDate,
     note,
+    mealWeightGrams,
     onProgress,
   } = params;
 
@@ -324,6 +329,7 @@ export const bulkAnalyzePhotos = async (params: {
         userId,
         note: note || undefined,
         eatenAt: mealDate.toISOString(),
+        mealWeightGrams: params.mealWeightGrams,
       });
       started++;
     } catch {

@@ -66,6 +66,7 @@ export type MealAnalysis = {
   user_id: string;
   object_keys: string[];
   note: string | null;
+  meal_weight_grams: number | null;
   status: MealAnalysisStatus;
   meal_id: string | null;
   error: string | null;
