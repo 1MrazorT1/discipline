@@ -5,6 +5,22 @@ const defaultColor = "#3f9c75";
 
 const cleanName = (value?: string | null) => value?.trim().replace(/\s+/g, " ") || null;
 
+/**
+ * Derive a display name from an email address by taking the part
+ * before the @ and capitalizing it (e.g. "john.doe@example.com" → "John").
+ */
+const nameFromEmail = (email?: string | null): string | null => {
+  if (!email) return null;
+  const local = email.split("@")[0];
+  if (!local) return null;
+  const capitalized = local
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
+  return capitalized || null;
+};
+
 export const ensureProfile = async (params: {
   userId: string;
   email?: string | null;
@@ -28,7 +44,8 @@ export const ensureProfile = async (params: {
   const metadataName =
     cleanName(authData.user?.user_metadata?.full_name) ??
     cleanName(authData.user?.user_metadata?.name);
-  const displayName = cleanName(params.name) ?? metadataName ?? "Me";
+  const displayName =
+    cleanName(params.name) ?? metadataName ?? nameFromEmail(params.email) ?? "Me";
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .insert({

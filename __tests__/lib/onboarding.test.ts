@@ -284,5 +284,71 @@ describe('onboarding', () => {
 
       expect(result.name).toBe('Meta Name');
     });
+
+    it('should derive a display name from email prefix when no name metadata exists (Issue #20)', async () => {
+      const mockAuthData = {
+        user: {
+          user_metadata: {},
+        },
+      };
+
+      (supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: mockAuthData });
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(createMockChain({ data: null, error: null }))
+        .mockReturnValueOnce({
+          insert: jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+              single: jest.fn().mockResolvedValue({
+                data: {
+                  ...mockProfile,
+                  name: 'John Doe',
+                },
+                error: null,
+              }),
+            }),
+          }),
+        });
+
+      const result = await ensureProfile({
+        userId: 'user1',
+        email: 'john.doe@example.com',
+      });
+
+      expect(result.name).toBe('John Doe');
+    });
+
+    it('should fall back to Me when email has no parseable name', async () => {
+      const mockAuthData = {
+        user: {
+          user_metadata: {},
+        },
+      };
+
+      (supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: mockAuthData });
+
+      (supabase.from as jest.Mock)
+        .mockReturnValueOnce(createMockChain({ data: null, error: null }))
+        .mockReturnValueOnce({
+          insert: jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+              single: jest.fn().mockResolvedValue({
+                data: {
+                  ...mockProfile,
+                  name: 'Me',
+                },
+                error: null,
+              }),
+            }),
+          }),
+        });
+
+      const result = await ensureProfile({
+        userId: 'user1',
+        email: '',
+      });
+
+      expect(result.name).toBe('Me');
+    });
   });
 });
